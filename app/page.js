@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useMemo } from 'react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, Legend } from 'recharts';
-import { TrendingUp, TrendingDown, Store, Package, AlertTriangle, Award, XCircle, Search, Download, Filter, ChevronRight, ArrowUp, ArrowDown, Minus, Menu, X, Home, Bell, LogOut, User, Check, FileText, ChevronDown } from 'lucide-react';
+import { TrendingUp, TrendingDown, Store, Package, AlertTriangle, Award, XCircle, Search, Download, Filter, ChevronRight, ArrowUp, ArrowDown, Minus, Menu, X, Home, Bell, LogOut, User, Check, FileText, ChevronDown, Settings } from 'lucide-react';
 import STORES from './stores.json';
 import PRODUCTS from './products.json';
 import FILTERS from './filters.json';
@@ -75,19 +75,19 @@ const MetricCell = ({ pct, from, to, label }) => (
   </div>
 );
 
-const ReturnsCell = ({ avgL6, avgP6, change }) => (
+const ReturnsCell = ({ pctL6, pctP6, change }) => (
   <div className="text-center">
-    <span className="text-sm">{avgP6?.toFixed(0)}→{avgL6?.toFixed(0)}</span>
+    <span className="text-sm">{(pctP6 || 0).toFixed(1)}%→{(pctL6 || 0).toFixed(1)}%</span>
     <p className={`text-xs font-bold ${change > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
-      {change > 0 ? '+' : ''}{change?.toFixed(1)}%
+      {change > 0 ? '+' : ''}{(change || 0).toFixed(1)}%
     </p>
   </div>
 );
 
-const PeakCell = ({ pct, peak, peakMonth }) => (
+const PeakCell = ({ pct, peak, peakMonth, current }) => (
   <div className="text-center">
     <span className={`font-bold ${pct >= -20 ? 'text-emerald-600' : pct >= -40 ? 'text-orange-500' : 'text-red-600'}`}>{fmtPct(pct)}</span>
-    <p className="text-xs text-gray-400">שיא: {fmt(peak)}</p>
+    <p className="text-xs text-gray-400">עכשיו: {fmt(current)} | שיא: {fmt(peak)}</p>
   </div>
 );
 
@@ -227,8 +227,8 @@ const StoresList = ({ stores, onSelect }) => {
     { k: 'metric_12v12', l: '12/12\n(2024↔2025)', r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
     { k: 'metric_6v6', l: '6/6\n(H1↔H2 25)', r: (v, r) => <MetricCell pct={v} from={r.qty_prev6} to={r.qty_last6} /> },
     { k: 'metric_3v3', l: '3/3\n(Q3↔Q4 25)', r: (v, r) => <MetricCell pct={v} from={r.qty_prev3} to={r.qty_last3} /> },
-    { k: 'metric_peak_distance', l: 'מרחק מהשיא', r: (v, r) => <PeakCell pct={v} peak={r.peak_value} peakMonth={r.peak_month} /> },
-    { k: 'returns_avg_last6', l: 'חזרות ממוצע\n(H1↔H2)', r: (v, r) => <ReturnsCell avgL6={v} avgP6={r.returns_avg_prev6} change={r.returns_change} /> },
+    { k: 'metric_peak_distance', l: 'מרחק מהשיא', r: (v, r) => <PeakCell pct={v} peak={r.peak_value} peakMonth={r.peak_month} current={r.current_value} /> },
+    { k: 'returns_pct_last6', l: 'חזרות %\n(H1↔H2)', r: (v, r) => <ReturnsCell pctL6={v} pctP6={r.returns_pct_prev6} change={r.returns_change} /> },
     { k: 'status', l: 'סטטוס', r: v => <Badge status={v} sm /> },
     { k: 'qty_total', l: 'כמות\nכוללת', r: v => <span className="font-bold">{fmt(v)}</span> },
   ];
@@ -286,8 +286,8 @@ const StoreDetail = ({ store, onBack }) => {
       <MBox label="6/6 (H1↔H2 2025)" value={store.metric_6v6} sub={fmt(store.qty_prev6) + '→' + fmt(store.qty_last6)} />
       <MBox label="3/3 (Q3↔Q4 2025)" value={store.metric_3v3} sub={fmt(store.qty_prev3) + '→' + fmt(store.qty_last3)} />
       <MBox label="2/2 (ספט-אוק↔נוב-דצמ)" value={store.metric_2v2} sub={fmt(store.qty_prev2) + '→' + fmt(store.qty_last2)} />
-      <MBox label="מרחק מהשיא" value={store.metric_peak_distance} extra={'שיא: ' + fmt(store.peak_value) + ' (' + fmtMonthHeb(store.peak_month) + ')'} />
-      <MBox label="חזרות ממוצע (H1↔H2)" value={(store.returns_avg_prev6?.toFixed(0) || 0) + '→' + (store.returns_avg_last6?.toFixed(0) || 0)} sub={'שינוי: ' + (store.returns_change > 0 ? '+' : '') + (store.returns_change?.toFixed(1) || 0) + '%'} pos={store.returns_change <= 0} />
+      <MBox label="מרחק מהשיא" value={store.metric_peak_distance} extra={'עכשיו: ' + fmt(store.current_value) + ' | שיא: ' + fmt(store.peak_value) + ' (' + fmtMonthHeb(store.peak_month) + ')'} />
+      <MBox label="חזרות % (H1↔H2)" value={(store.returns_pct_prev6?.toFixed(1) || 0) + '%→' + (store.returns_pct_last6?.toFixed(1) || 0) + '%'} sub={'שינוי: ' + (store.returns_change > 0 ? '+' : '') + (store.returns_change?.toFixed(1) || 0) + '%'} pos={store.returns_change <= 0} />
     </div>
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       <div className="bg-white rounded-xl shadow p-4 text-center"><p className="text-sm text-gray-500">כמות 2024</p><p className="text-2xl font-bold text-blue-600">{fmt(store.qty_2024)}</p></div>
@@ -315,9 +315,10 @@ const ProductsList = ({ products, onSelect }) => {
     { k: 'metric_12v12', l: '12/12\n(2024↔2025)', r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
     { k: 'metric_6v6', l: '6/6\n(H1↔H2)', r: (v, r) => <MetricCell pct={v} from={r.qty_prev6} to={r.qty_last6} /> },
     { k: 'metric_3v3', l: '3/3\n(Q3↔Q4)', r: (v, r) => <MetricCell pct={v} from={r.qty_prev3} to={r.qty_last3} /> },
-    { k: 'metric_peak_distance', l: 'מרחק מהשיא', r: (v, r) => <PeakCell pct={v} peak={r.peak_value} peakMonth={r.peak_month} /> },
-    { k: 'returns_avg_last6', l: 'חזרות\n(H1↔H2)', r: (v, r) => <ReturnsCell avgL6={v} avgP6={r.returns_avg_prev6} change={r.returns_change} /> },
+    { k: 'metric_peak_distance', l: 'מרחק מהשיא', r: (v, r) => <PeakCell pct={v} peak={r.peak_value} peakMonth={r.peak_month} current={r.current_value} /> },
+    { k: 'returns_pct_last6', l: 'חזרות %\n(H1↔H2)', r: (v, r) => <ReturnsCell pctL6={v} pctP6={r.returns_pct_prev6} change={r.returns_change} /> },
     { k: 'status', l: 'סטטוס', r: v => <Badge status={v} sm /> },
+    { k: 'total_sales', l: 'מחזור', r: v => <span className="font-bold text-gray-600">₪{fmt(v)}</span> },
     { k: 'qty_total', l: 'כמות', r: v => <span className="font-bold">{fmt(v)}</span> },
   ];
   
@@ -363,8 +364,8 @@ const ProductDetail = ({ product, onBack }) => {
       <MBox label="6/6 (H1↔H2)" value={product.metric_6v6} sub={fmt(product.qty_prev6) + '→' + fmt(product.qty_last6)} />
       <MBox label="3/3 (Q3↔Q4)" value={product.metric_3v3} sub={fmt(product.qty_prev3) + '→' + fmt(product.qty_last3)} />
       <MBox label="2/2" value={product.metric_2v2} sub={fmt(product.qty_prev2) + '→' + fmt(product.qty_last2)} />
-      <MBox label="מרחק מהשיא" value={product.metric_peak_distance} extra={'שיא: ' + fmt(product.peak_value) + ' (' + fmtMonthHeb(product.peak_month) + ')'} />
-      <MBox label="חזרות (H1↔H2)" value={(product.returns_avg_prev6?.toFixed(0) || 0) + '→' + (product.returns_avg_last6?.toFixed(0) || 0)} sub={'שינוי: ' + (product.returns_change > 0 ? '+' : '') + (product.returns_change?.toFixed(1) || 0) + '%'} pos={product.returns_change <= 0} />
+      <MBox label="מרחק מהשיא" value={product.metric_peak_distance} extra={'עכשיו: ' + fmt(product.current_value) + ' | שיא: ' + fmt(product.peak_value) + ' (' + fmtMonthHeb(product.peak_month) + ')'} />
+      <MBox label="חזרות % (H1↔H2)" value={(product.returns_pct_prev6?.toFixed(1) || 0) + '%→' + (product.returns_pct_last6?.toFixed(1) || 0) + '%'} sub={'שינוי: ' + (product.returns_change > 0 ? '+' : '') + (product.returns_change?.toFixed(1) || 0) + '%'} pos={product.returns_change <= 0} />
     </div>
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       <div className="bg-white rounded-xl shadow p-4 text-center"><p className="text-sm text-gray-500">כמות 2024</p><p className="text-2xl font-bold text-blue-600">{fmt(product.qty_2024)}</p></div>
@@ -394,8 +395,8 @@ const Alerts = ({ stores, onSelect }) => {
         </div>
         <div className="grid grid-cols-3 gap-3 text-center">
           <div className="bg-red-50 rounded-lg p-2"><p className="text-xs text-gray-500">12/12 (2024↔2025)</p><p className="font-bold text-red-600">{fmtPct(s.metric_12v12)}</p></div>
-          <div className="bg-red-50 rounded-lg p-2"><p className="text-xs text-gray-500">ירידה רצופה</p><p className="font-bold text-red-600">{s.declining_months} חודשים</p>{s.declining_months_list && s.declining_months_list.length > 0 && <p className="text-xs text-gray-400 mt-1">{s.declining_months_list.slice(0,3).map(m => fmtMonth(m)).join(', ')}</p>}</div>
-          <div className="bg-red-50 rounded-lg p-2"><p className="text-xs text-gray-500">מרחק מהשיא</p><p className="font-bold text-red-600">{fmtPct(s.metric_peak_distance)}</p><p className="text-xs text-gray-400">שיא: {fmt(s.peak_value)}</p></div>
+          <div className="bg-red-50 rounded-lg p-2"><p className="text-xs text-gray-500">ירידה רצופה</p><p className="font-bold text-red-600">{s.declining_months || 0} חודשים</p>{s.declining_months_list && s.declining_months_list.length > 0 && <p className="text-xs text-gray-400 mt-1">{s.declining_months_list.slice(-3).reverse().map(m => fmtMonth(m)).join('→')}</p>}</div>
+          <div className="bg-red-50 rounded-lg p-2"><p className="text-xs text-gray-500">מרחק מהשיא</p><p className="font-bold text-red-600">{fmtPct(s.metric_peak_distance)}</p><p className="text-xs text-gray-400">עכשיו: {fmt(s.current_value)}</p></div>
         </div>
       </div>
     )}</div>}
@@ -482,6 +483,115 @@ const Trends = ({ stores, products }) => {
   </div>);
 };
 
+const SettingsPage = () => {
+  const [statusConfig, setStatusConfig] = useState({
+    growth_12v12: 10,
+    growth_3v3: 0,
+    growth_6v6: 5,
+    recovery_12v12: 0,
+    recovery_3v3: 10,
+    stable_min: -10,
+    stable_max: 10,
+    stable_3v3: -10,
+    decline_12v12: -10,
+    decline_months: 3,
+    crash_12v12: -30,
+    crash_peak: -50,
+    crash_months: 6
+  });
+  
+  const [saved, setSaved] = useState(false);
+  
+  const handleSave = () => {
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+  
+  return (<div className="space-y-6">
+    <h2 className="text-xl font-bold">הגדרות</h2>
+    
+    <div className="bg-white rounded-2xl shadow-lg p-6 border">
+      <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Settings size={20}/>הגדרות סטטוסים</h3>
+      <p className="text-sm text-gray-500 mb-6">הגדר את הסיפים לחישוב סטטוס כל חנות/מוצר</p>
+      
+      <div className="space-y-6">
+        <div className="p-4 bg-emerald-50 rounded-xl">
+          <h4 className="font-bold text-emerald-700 mb-3">🚀 צמיחה</h4>
+          <p className="text-xs text-gray-600 mb-3">12/12 ≥ X% AND (3/3 ≥ Y% OR 6/6 ≥ Z%)</p>
+          <div className="grid grid-cols-3 gap-3">
+            <div><label className="text-xs text-gray-600">12/12 מינימום</label><input type="number" value={statusConfig.growth_12v12} onChange={e => setStatusConfig({...statusConfig, growth_12v12: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
+            <div><label className="text-xs text-gray-600">3/3 מינימום</label><input type="number" value={statusConfig.growth_3v3} onChange={e => setStatusConfig({...statusConfig, growth_3v3: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
+            <div><label className="text-xs text-gray-600">6/6 מינימום</label><input type="number" value={statusConfig.growth_6v6} onChange={e => setStatusConfig({...statusConfig, growth_6v6: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
+          </div>
+        </div>
+        
+        <div className="p-4 bg-amber-50 rounded-xl">
+          <h4 className="font-bold text-amber-700 mb-3">📈 התאוששות</h4>
+          <p className="text-xs text-gray-600 mb-3">12/12 &lt; X% BUT 3/3 ≥ Y%</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="text-xs text-gray-600">12/12 מקסימום</label><input type="number" value={statusConfig.recovery_12v12} onChange={e => setStatusConfig({...statusConfig, recovery_12v12: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
+            <div><label className="text-xs text-gray-600">3/3 מינימום</label><input type="number" value={statusConfig.recovery_3v3} onChange={e => setStatusConfig({...statusConfig, recovery_3v3: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
+          </div>
+        </div>
+        
+        <div className="p-4 bg-blue-50 rounded-xl">
+          <h4 className="font-bold text-blue-700 mb-3">⚖️ יציב</h4>
+          <p className="text-xs text-gray-600 mb-3">X% ≤ 12/12 &lt; Y% AND 3/3 &gt; Z%</p>
+          <div className="grid grid-cols-3 gap-3">
+            <div><label className="text-xs text-gray-600">12/12 מינימום</label><input type="number" value={statusConfig.stable_min} onChange={e => setStatusConfig({...statusConfig, stable_min: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
+            <div><label className="text-xs text-gray-600">12/12 מקסימום</label><input type="number" value={statusConfig.stable_max} onChange={e => setStatusConfig({...statusConfig, stable_max: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
+            <div><label className="text-xs text-gray-600">3/3 מינימום</label><input type="number" value={statusConfig.stable_3v3} onChange={e => setStatusConfig({...statusConfig, stable_3v3: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
+          </div>
+        </div>
+        
+        <div className="p-4 bg-orange-50 rounded-xl">
+          <h4 className="font-bold text-orange-700 mb-3">📉 ירידה מתונה</h4>
+          <p className="text-xs text-gray-600 mb-3">12/12 &lt; X% OR declining ≥ Y months</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="text-xs text-gray-600">12/12 מקסימום</label><input type="number" value={statusConfig.decline_12v12} onChange={e => setStatusConfig({...statusConfig, decline_12v12: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
+            <div><label className="text-xs text-gray-600">חודשי ירידה</label><input type="number" value={statusConfig.decline_months} onChange={e => setStatusConfig({...statusConfig, decline_months: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
+          </div>
+        </div>
+        
+        <div className="p-4 bg-red-50 rounded-xl">
+          <h4 className="font-bold text-red-700 mb-3">💥 התרסקות</h4>
+          <p className="text-xs text-gray-600 mb-3">12/12 &lt; X% OR peak_distance &lt; Y% OR declining ≥ Z months</p>
+          <div className="grid grid-cols-3 gap-3">
+            <div><label className="text-xs text-gray-600">12/12 מקסימום</label><input type="number" value={statusConfig.crash_12v12} onChange={e => setStatusConfig({...statusConfig, crash_12v12: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
+            <div><label className="text-xs text-gray-600">מרחק מהשיא</label><input type="number" value={statusConfig.crash_peak} onChange={e => setStatusConfig({...statusConfig, crash_peak: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
+            <div><label className="text-xs text-gray-600">חודשי ירידה</label><input type="number" value={statusConfig.crash_months} onChange={e => setStatusConfig({...statusConfig, crash_months: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
+          </div>
+        </div>
+      </div>
+      
+      <button onClick={handleSave} className={'mt-6 px-6 py-2 rounded-xl font-medium transition-all ' + (saved ? 'bg-emerald-500 text-white' : 'bg-blue-500 text-white hover:bg-blue-600')}>
+        {saved ? <span className="flex items-center gap-2"><Check size={16}/>נשמר!</span> : 'שמור הגדרות'}
+      </button>
+    </div>
+    
+    <div className="bg-white rounded-2xl shadow-lg p-6 border">
+      <h3 className="text-lg font-bold mb-4">📤 העלאת קובץ נתונים</h3>
+      <p className="text-sm text-gray-500 mb-4">העלה קובץ Excel חדש לעדכון הנתונים</p>
+      <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-400 cursor-pointer transition-colors">
+        <Download className="mx-auto text-gray-400 mb-3" size={32}/>
+        <p className="text-gray-600">גרור קובץ לכאן או לחץ לבחירה</p>
+        <p className="text-xs text-gray-400 mt-2">פורמט: Excel (.xlsx)</p>
+      </div>
+    </div>
+    
+    <div className="bg-white rounded-2xl shadow-lg p-6 border">
+      <h3 className="text-lg font-bold mb-4">ℹ️ מידע על המערכת</h3>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+        <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-blue-600">{STORES.length}</p><p className="text-xs text-gray-500">חנויות</p></div>
+        <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-purple-600">{PRODUCTS.length}</p><p className="text-xs text-gray-500">מוצרים</p></div>
+        <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-emerald-600">{STORES.filter(s => !s.is_inactive).length}</p><p className="text-xs text-gray-500">חנויות פעילות</p></div>
+        <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-gray-600">v5.0</p><p className="text-xs text-gray-500">גרסה</p></div>
+      </div>
+      <p className="text-xs text-gray-400 text-center mt-4">עדכון אחרון: ינואר 2026 | נתונים: ינו 2024 - דצמ 2025</p>
+    </div>
+  </div>);
+};
+
 export default function App() {
   const [tab, setTab] = useState('overview');
   const [store, setStore] = useState(null);
@@ -495,7 +605,8 @@ export default function App() {
     { id: 'trends', l: 'מגמות', I: TrendingUp },
     { id: 'alerts', l: 'התראות', I: Bell },
     { id: 'rankings', l: 'דירוגים', I: Award },
-    { id: 'inactive', l: 'לא פעילות', I: XCircle }
+    { id: 'inactive', l: 'לא פעילות', I: XCircle },
+    { id: 'settings', l: 'הגדרות', I: Settings }
   ];
   
   const nav = (t, i) => { 
@@ -514,6 +625,7 @@ export default function App() {
       case 'alerts': return <Alerts stores={STORES} onSelect={setStore} />;
       case 'rankings': return <Rankings stores={STORES} onSelect={setStore} />;
       case 'inactive': return <Inactive stores={STORES} onSelect={setStore} />;
+      case 'settings': return <SettingsPage />;
       default: return <Overview stores={STORES} products={PRODUCTS} onNav={nav} />;
     }
   };
