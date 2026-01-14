@@ -1,3 +1,5 @@
+import './globals.css';
+
 export const metadata = {
   title: 'Baron Analytics - מערכת ניתוח מכירות',
   description: 'מערכת לניתוח נתוני מכירות וביצועים',
