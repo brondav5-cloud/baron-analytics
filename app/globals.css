@@ -24,7 +24,3 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #a1a1a1;
 }
-
-@media print {
-  .print\\:hidden { display: none !important; }
-}
