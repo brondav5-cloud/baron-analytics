@@ -320,13 +320,16 @@ const StoresTab = ({ stores, filters, onSelectStore }) => {
 
   const columns = [
     { key: 'name', label: 'חנות', render: (val, row) => <div className="min-w-32"><p className="font-medium truncate">{val}</p><p className="text-xs text-gray-500 truncate">{row.city} {row.network && `• ${row.network}`}</p></div> },
-    { key: 'metric_12v12', label: '12/12', render: (val) => <span className={`font-semibold ${val >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatPercent(val)}</span> },
-    { key: 'metric_6v6', label: '6/6', render: (val) => <span className={val >= 0 ? 'text-emerald-600' : 'text-red-600'}>{formatPercent(val)}</span> },
-    { key: 'metric_3v3', label: '3/3', render: (val) => <span className={val >= 0 ? 'text-emerald-600' : 'text-red-600'}>{formatPercent(val)}</span> },
-    { key: 'returns_last6', label: 'חזרות', render: (val, row) => <span>{val?.toFixed(1)}%</span> },
+    { key: 'metric_12v12', label: '12/12', render: (val, row) => <div className="text-center"><span className={`font-bold ${val >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatPercent(val)}</span><p className="text-xs text-gray-400">{formatNumber(row.qty_2024)}→{formatNumber(row.qty_2025)}</p></div> },
+    { key: 'metric_6v6', label: '6/6', render: (val, row) => <div className="text-center"><span className={`font-semibold ${val >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatPercent(val)}</span><p className="text-xs text-gray-400">{formatNumber(row.qty_prev6)}→{formatNumber(row.qty_last6)}</p></div> },
+    { key: 'metric_3v3', label: '3/3', render: (val, row) => <div className="text-center"><span className={`font-semibold ${val >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatPercent(val)}</span><p className="text-xs text-gray-400">{formatNumber(row.qty_prev3)}→{formatNumber(row.qty_last3)}</p></div> },
+    { key: 'metric_2v2', label: '2/2', render: (val, row) => <div className="text-center"><span className={`font-semibold ${val >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatPercent(val)}</span><p className="text-xs text-gray-400">{formatNumber(row.qty_prev2)}→{formatNumber(row.qty_last2)}</p></div> },
+    { key: 'metric_peak_distance', label: 'מהשיא', render: (val) => <span className={`font-semibold ${val >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatPercent(val)}</span> },
+    { key: 'returns_pct_last6', label: 'חזרות', render: (val, row) => <div><span className={val > 15 ? 'text-red-600 font-bold' : ''}>{val?.toFixed(1)}%</span><p className="text-xs text-gray-400">Δ{row.returns_change > 0 ? '+' : ''}{row.returns_change?.toFixed(1)}%</p></div> },
     { key: 'status_long', label: 'ארוך', render: (val) => <StatusBadge status={val} size="sm" /> },
     { key: 'status_short', label: 'קצר', render: (val) => <StatusBadge status={val} size="sm" /> },
-    { key: 'total_sales', label: 'מחזור', render: (val) => <span className="font-semibold">₪{formatNumber(val)}</span> },
+    { key: 'qty_total', label: 'כמות', render: (val) => <span className="font-bold">{formatNumber(val)}</span> },
+    { key: 'total_sales', label: 'מחזור', render: (val) => <span className="text-gray-600">₪{formatNumber(val)}</span> },
   ];
 
   return (
@@ -374,27 +377,28 @@ const StoreDetailPage = ({ store, onBack }) => {
         </div>
       </div>
       <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
-        <MetricBox label="12/12" value={store.metric_12v12} />
-        <MetricBox label="6/6" value={store.metric_6v6} />
-        <MetricBox label="3/3 YoY" value={store.metric_3v3_yoy} />
-        <MetricBox label="3/3" value={store.metric_3v3} />
+        <MetricBox label="12/12" value={store.metric_12v12} subValue={`${formatNumber(store.qty_2024)}→${formatNumber(store.qty_2025)}`} />
+        <MetricBox label="6/6" value={store.metric_6v6} subValue={`${formatNumber(store.qty_prev6)}→${formatNumber(store.qty_last6)}`} />
+        <MetricBox label="3/3" value={store.metric_3v3} subValue={`${formatNumber(store.qty_prev3)}→${formatNumber(store.qty_last3)}`} />
+        <MetricBox label="2/2" value={store.metric_2v2} subValue={`${formatNumber(store.qty_prev2)}→${formatNumber(store.qty_last2)}`} />
         <MetricBox label="מהשיא" value={store.metric_peak_distance} />
-        <MetricBox label="חזרות" value={`${store.returns_last6?.toFixed(1)}%`} positive={store.returns_change <= 0} />
+        <MetricBox label="חזרות" value={`${store.returns_pct_last6?.toFixed(1)}%`} subValue={`שינוי: ${store.returns_change > 0 ? '+' : ''}${store.returns_change?.toFixed(1)}%`} positive={store.returns_change <= 0} />
       </div>
-      <div className="grid grid-cols-3 gap-2 sm:gap-4">
-        <div className="bg-white rounded-xl shadow p-3 sm:p-5 text-center"><p className="text-xs sm:text-sm text-gray-500">2024</p><p className="text-lg sm:text-2xl font-bold text-blue-600">₪{formatNumber(store.sales_2024)}</p></div>
-        <div className="bg-white rounded-xl shadow p-3 sm:p-5 text-center"><p className="text-xs sm:text-sm text-gray-500">2025</p><p className="text-lg sm:text-2xl font-bold text-emerald-600">₪{formatNumber(store.sales_2025)}</p></div>
-        <div className="bg-white rounded-xl shadow p-3 sm:p-5 text-center"><p className="text-xs sm:text-sm text-gray-500">סה״כ</p><p className="text-lg sm:text-2xl font-bold text-gray-900">₪{formatNumber(store.total_sales)}</p></div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
+        <div className="bg-white rounded-xl shadow p-3 sm:p-5 text-center"><p className="text-xs sm:text-sm text-gray-500">כמות 2024</p><p className="text-lg sm:text-2xl font-bold text-blue-600">{formatNumber(store.qty_2024)}</p></div>
+        <div className="bg-white rounded-xl shadow p-3 sm:p-5 text-center"><p className="text-xs sm:text-sm text-gray-500">כמות 2025</p><p className="text-lg sm:text-2xl font-bold text-emerald-600">{formatNumber(store.qty_2025)}</p></div>
+        <div className="bg-white rounded-xl shadow p-3 sm:p-5 text-center"><p className="text-xs sm:text-sm text-gray-500">מחזור 2024</p><p className="text-lg sm:text-xl font-bold text-gray-600">₪{formatNumber(store.sales_2024)}</p></div>
+        <div className="bg-white rounded-xl shadow p-3 sm:p-5 text-center"><p className="text-xs sm:text-sm text-gray-500">מחזור 2025</p><p className="text-lg sm:text-xl font-bold text-gray-600">₪{formatNumber(store.sales_2025)}</p></div>
       </div>
       <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6 border border-gray-100">
-        <h3 className="text-base sm:text-lg font-bold mb-4">מגמת מכירות</h3>
+        <h3 className="text-base sm:text-lg font-bold mb-4">מגמת כמויות</h3>
         <ResponsiveContainer width="100%" height={280}>
           <AreaChart data={chartData}>
             <defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs>
             <CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" tick={{ fontSize: 10 }} />
-            <YAxis tickFormatter={(v) => `₪${(v / 1000).toFixed(0)}K`} tick={{ fontSize: 10 }} />
-            <Tooltip formatter={(v) => `₪${formatNumber(v)}`} />
-            <Area type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={2} fill="url(#sg)" />
+            <YAxis tickFormatter={(v) => formatNumber(v)} tick={{ fontSize: 10 }} />
+            <Tooltip formatter={(v) => formatNumber(v)} />
+            <Area type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={2} fill="url(#sg)" name="כמות" />
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -414,11 +418,16 @@ const ProductsTab = ({ products, filters, onSelectProduct }) => {
 
   const columns = [
     { key: 'name', label: 'מוצר', render: (val, row) => <div className="min-w-32"><p className="font-medium truncate">{val}</p><p className="text-xs text-gray-500 truncate">{row.category}</p></div> },
-    { key: 'metric_12v12', label: '12/12', render: (val) => <span className={`font-semibold ${val >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatPercent(val)}</span> },
-    { key: 'metric_6v6', label: '6/6', render: (val) => <span className={val >= 0 ? 'text-emerald-600' : 'text-red-600'}>{formatPercent(val)}</span> },
-    { key: 'status_long', label: 'ארוך', render: (val) => <StatusBadge status={val} size="sm" /> },
-    { key: 'status_short', label: 'קצר', render: (val) => <StatusBadge status={val} size="sm" /> },
-    { key: 'total_sales', label: 'מחזור', render: (val) => <span className="font-semibold">₪{formatNumber(val)}</span> },
+    { key: 'metric_12v12', label: '12/12', render: (val, row) => <div className="text-center"><span className={`font-bold ${val >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatPercent(val)}</span><p className="text-xs text-gray-400">{formatNumber(row.qty_2024)}→{formatNumber(row.qty_2025)}</p></div> },
+    { key: 'metric_6v6', label: '6/6', render: (val, row) => <div className="text-center"><span className={`font-semibold ${val >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatPercent(val)}</span><p className="text-xs text-gray-400">{formatNumber(row.qty_prev6)}→{formatNumber(row.qty_last6)}</p></div> },
+    { key: 'metric_3v3', label: '3/3', render: (val, row) => <div className="text-center"><span className={`font-semibold ${val >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatPercent(val)}</span><p className="text-xs text-gray-400">{formatNumber(row.qty_prev3)}→{formatNumber(row.qty_last3)}</p></div> },
+    { key: 'metric_3v3_yoy', label: '3/3 YoY', render: (val) => <span className={`font-semibold ${val >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatPercent(val)}</span> },
+    { key: 'metric_2v2', label: '2/2', render: (val, row) => <div className="text-center"><span className={`font-semibold ${val >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatPercent(val)}</span><p className="text-xs text-gray-400">{formatNumber(row.qty_prev2)}→{formatNumber(row.qty_last2)}</p></div> },
+    { key: 'metric_peak_distance', label: 'מהשיא', render: (val) => <span className={`font-semibold ${val >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatPercent(val)}</span> },
+    { key: 'returns_pct_last6', label: 'חזרות', render: (val) => <span className={val > 15 ? 'text-red-600 font-bold' : ''}>{val?.toFixed(1)}%</span> },
+    { key: 'status_long', label: 'סטטוס', render: (val) => <StatusBadge status={val} size="sm" /> },
+    { key: 'qty_total', label: 'כמות', render: (val) => <span className="font-bold">{formatNumber(val)}</span> },
+    { key: 'total_sales', label: 'מחזור', render: (val) => <span className="text-gray-600">₪{formatNumber(val)}</span> },
   ];
 
   return (
@@ -598,7 +607,13 @@ const RankingsTab = ({ stores, onSelectStore }) => {
 
 // Inactive Tab
 const InactiveTab = ({ stores, onSelectStore }) => {
-  const inactive = useMemo(() => stores.filter(s => s.is_inactive), [stores]);
+  const formatMonthHeb = (ym) => {
+    if (!ym) return '-';
+    const months = ['','ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+    const s = String(ym);
+    return `${months[parseInt(s.slice(4))]} ${s.slice(0,4)}`;
+  };
+  const inactive = useMemo(() => stores.filter(s => s.is_inactive).sort((a,b) => (b.last_active_month || 0) - (a.last_active_month || 0)), [stores]);
   return (
     <div className="space-y-4">
       <h2 className="text-lg sm:text-xl font-bold">לא פעילות ({inactive.length})</h2>
@@ -608,12 +623,16 @@ const InactiveTab = ({ stores, onSelectStore }) => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {inactive.map(store => (
             <div key={store.id} onClick={() => onSelectStore(store)}
-              className="bg-white rounded-2xl shadow p-4 sm:p-5 border border-gray-200 opacity-75 hover:opacity-100 cursor-pointer">
+              className="bg-white rounded-2xl shadow p-4 sm:p-5 border border-gray-200 hover:border-gray-400 cursor-pointer">
               <div className="flex justify-between items-start mb-3">
                 <div className="min-w-0"><h3 className="font-bold truncate">{store.name}</h3><p className="text-sm text-gray-500 truncate">{store.city}</p></div>
-                <XCircle className="text-gray-400 flex-shrink-0" size={20} />
+                <XCircle className="text-red-400 flex-shrink-0" size={20} />
               </div>
-              <p className="text-sm text-gray-500">מחזור: <span className="font-semibold">₪{formatNumber(store.total_sales)}</span></p>
+              <div className="space-y-1 text-sm">
+                <p className="text-gray-500">כמות היסטורית: <span className="font-semibold">{formatNumber(store.qty_total)}</span></p>
+                <p className="text-gray-500">מחזור היסטורי: <span className="font-semibold">₪{formatNumber(store.total_sales)}</span></p>
+                <p className="text-red-600 font-medium mt-2">לא פעיל מ: {formatMonthHeb(store.last_active_month)}</p>
+              </div>
             </div>
           ))}
         </div>
@@ -639,12 +658,21 @@ const SettingsTab = ({ thresholds, setThresholds }) => (
   <div className="space-y-4 sm:space-y-6">
     <h2 className="text-lg sm:text-xl font-bold">הגדרות</h2>
     <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6 border border-gray-100">
-      <h3 className="text-base sm:text-lg font-bold mb-4 flex items-center gap-2"><Settings size={20} />ספי מדדים</h3>
+      <h3 className="text-base sm:text-lg font-bold mb-4 flex items-center gap-2"><Settings size={20} />ספי מדדים - טווח ארוך (12/12, 6/6)</h3>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-        <div><label className="block text-xs sm:text-sm font-medium mb-1">סף צמיחה (%)</label><input type="number" value={thresholds.growth} onChange={(e) => setThresholds({...thresholds, growth: +e.target.value})} className="w-full px-3 sm:px-4 py-2 border rounded-xl text-sm" /></div>
-        <div><label className="block text-xs sm:text-sm font-medium mb-1">סף יציב עליון (%)</label><input type="number" value={thresholds.stable_high} onChange={(e) => setThresholds({...thresholds, stable_high: +e.target.value})} className="w-full px-3 sm:px-4 py-2 border rounded-xl text-sm" /></div>
-        <div><label className="block text-xs sm:text-sm font-medium mb-1">סף יציב תחתון (%)</label><input type="number" value={thresholds.stable_low} onChange={(e) => setThresholds({...thresholds, stable_low: +e.target.value})} className="w-full px-3 sm:px-4 py-2 border rounded-xl text-sm" /></div>
-        <div><label className="block text-xs sm:text-sm font-medium mb-1">סף התרסקות (%)</label><input type="number" value={thresholds.decline} onChange={(e) => setThresholds({...thresholds, decline: +e.target.value})} className="w-full px-3 sm:px-4 py-2 border rounded-xl text-sm" /></div>
+        <div><label className="block text-xs sm:text-sm font-medium mb-1">סף צמיחה (%)</label><input type="number" value={thresholds.growth_long} onChange={(e) => setThresholds({...thresholds, growth_long: +e.target.value})} className="w-full px-3 sm:px-4 py-2 border rounded-xl text-sm" /></div>
+        <div><label className="block text-xs sm:text-sm font-medium mb-1">סף יציב עליון (%)</label><input type="number" value={thresholds.stable_high_long} onChange={(e) => setThresholds({...thresholds, stable_high_long: +e.target.value})} className="w-full px-3 sm:px-4 py-2 border rounded-xl text-sm" /></div>
+        <div><label className="block text-xs sm:text-sm font-medium mb-1">סף יציב תחתון (%)</label><input type="number" value={thresholds.stable_low_long} onChange={(e) => setThresholds({...thresholds, stable_low_long: +e.target.value})} className="w-full px-3 sm:px-4 py-2 border rounded-xl text-sm" /></div>
+        <div><label className="block text-xs sm:text-sm font-medium mb-1">סף התרסקות (%)</label><input type="number" value={thresholds.crash_long} onChange={(e) => setThresholds({...thresholds, crash_long: +e.target.value})} className="w-full px-3 sm:px-4 py-2 border rounded-xl text-sm" /></div>
+      </div>
+    </div>
+    <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6 border border-gray-100">
+      <h3 className="text-base sm:text-lg font-bold mb-4 flex items-center gap-2"><Settings size={20} />ספי מדדים - טווח קצר (3/3, 2/2)</h3>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+        <div><label className="block text-xs sm:text-sm font-medium mb-1">סף צמיחה (%)</label><input type="number" value={thresholds.growth_short} onChange={(e) => setThresholds({...thresholds, growth_short: +e.target.value})} className="w-full px-3 sm:px-4 py-2 border rounded-xl text-sm" /></div>
+        <div><label className="block text-xs sm:text-sm font-medium mb-1">סף יציב עליון (%)</label><input type="number" value={thresholds.stable_high_short} onChange={(e) => setThresholds({...thresholds, stable_high_short: +e.target.value})} className="w-full px-3 sm:px-4 py-2 border rounded-xl text-sm" /></div>
+        <div><label className="block text-xs sm:text-sm font-medium mb-1">סף יציב תחתון (%)</label><input type="number" value={thresholds.stable_low_short} onChange={(e) => setThresholds({...thresholds, stable_low_short: +e.target.value})} className="w-full px-3 sm:px-4 py-2 border rounded-xl text-sm" /></div>
+        <div><label className="block text-xs sm:text-sm font-medium mb-1">סף התרסקות (%)</label><input type="number" value={thresholds.crash_short} onChange={(e) => setThresholds({...thresholds, crash_short: +e.target.value})} className="w-full px-3 sm:px-4 py-2 border rounded-xl text-sm" /></div>
       </div>
     </div>
     <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6 border border-gray-100">
@@ -665,7 +693,7 @@ export default function BaronAnalytics() {
   const [selectedStore, setSelectedStore] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [thresholds, setThresholds] = useState({ growth: 10, stable_high: -5, stable_low: -15, decline: -30 });
+  const [thresholds, setThresholds] = useState({ growth_long: 10, stable_high_long: -5, stable_low_long: -15, crash_long: -30, growth_short: 10, stable_high_short: -5, stable_low_short: -15, crash_short: -30 });
 
   const tabs = [
     { id: 'overview', label: 'סקירה', Icon: Home },
