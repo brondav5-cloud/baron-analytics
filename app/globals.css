@@ -22,3 +22,110 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #a1a1a1;
 }
+
+/* Print Styles for PDF Export */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+  
+  body {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  
+  .print\:hidden {
+    display: none !important;
+  }
+  
+  /* Ensure backgrounds print */
+  * {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  
+  /* Fix SVG charts */
+  svg {
+    width: 100% !important;
+    height: auto !important;
+    max-height: 250px !important;
+  }
+  
+  .recharts-wrapper {
+    width: 100% !important;
+    height: 250px !important;
+  }
+  
+  .recharts-surface {
+    width: 100% !important;
+  }
+  
+  /* Page breaks */
+  .bg-white {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  
+  /* Reduce padding for print */
+  .p-6 {
+    padding: 12px !important;
+  }
+  
+  .p-4 {
+    padding: 8px !important;
+  }
+  
+  .gap-6 {
+    gap: 12px !important;
+  }
+  
+  .gap-4 {
+    gap: 8px !important;
+  }
+  
+  /* Ensure text is readable */
+  .text-2xl {
+    font-size: 18px !important;
+  }
+  
+  .text-xl {
+    font-size: 16px !important;
+  }
+  
+  .text-lg {
+    font-size: 14px !important;
+  }
+  
+  /* Table fits on page */
+  table {
+    font-size: 11px !important;
+  }
+  
+  th, td {
+    padding: 4px 6px !important;
+  }
+  
+  /* Hide scrollbars */
+  .overflow-y-auto {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+  
+  .overflow-x-auto {
+    overflow: visible !important;
+  }
+  
+  /* Grid adjustments */
+  .grid-cols-3 {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+  
+  .lg\:grid-cols-6 {
+    grid-template-columns: repeat(6, 1fr) !important;
+  }
+  
+  .lg\:grid-cols-4 {
+    grid-template-columns: repeat(4, 1fr) !important;
+  }
+}
