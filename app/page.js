@@ -211,6 +211,7 @@ const StoresList = ({ stores, onSelect }) => {
   const [drivers, setDrivers] = useState([]);
   const [agents, setAgents] = useState([]);
   const [statuses, setStatuses] = useState([]);
+  const [minQty, setMinQty] = useState(0);
   const [showF, setShowF] = useState(false);
   
   const filtered = useMemo(() => stores.filter(s => {
@@ -219,16 +220,17 @@ const StoresList = ({ stores, onSelect }) => {
     if (drivers.length && !drivers.includes(s.driver)) return false;
     if (agents.length && !agents.includes(s.agent)) return false;
     if (statuses.length && !statuses.includes(s.status)) return false;
+    if (minQty > 0 && (s.qty_total || 0) < minQty) return false;
     return true;
-  }), [stores, cities, networks, drivers, agents, statuses]);
+  }), [stores, cities, networks, drivers, agents, statuses, minQty]);
   
   const cols = [
     { k: 'name', l: 'חנות', r: (v, r) => <div><p className="font-medium">{v}</p><p className="text-xs text-gray-500">{r.city}</p></div> },
-    { k: 'metric_12v12', l: '12/12\n(2024↔2025)', r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
-    { k: 'metric_6v6', l: '6/6\n(H1↔H2 25)', r: (v, r) => <MetricCell pct={v} from={r.qty_prev6} to={r.qty_last6} /> },
-    { k: 'metric_3v3', l: '3/3\n(Q3↔Q4 25)', r: (v, r) => <MetricCell pct={v} from={r.qty_prev3} to={r.qty_last3} /> },
+    { k: 'metric_12v12', l: 'שנתי\nינו-דצמ 24→25', r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
+    { k: 'metric_6v6', l: '6 חודשים\nינו-יונ→יול-דצמ', r: (v, r) => <MetricCell pct={v} from={r.qty_prev6} to={r.qty_last6} /> },
+    { k: 'metric_3v3', l: '3 חודשים\nיול-ספט→אוק-דצמ', r: (v, r) => <MetricCell pct={v} from={r.qty_prev3} to={r.qty_last3} /> },
     { k: 'metric_peak_distance', l: 'מרחק מהשיא', r: (v, r) => <PeakCell pct={v} peak={r.peak_value} peakMonth={r.peak_month} current={r.current_value} /> },
-    { k: 'returns_pct_last6', l: 'חזרות %\n(H1↔H2)', r: (v, r) => <ReturnsCell pctL6={v} pctP6={r.returns_pct_prev6} change={r.returns_change} /> },
+    { k: 'returns_pct_last6', l: 'חזרות %\nינו-יונ→יול-דצמ', r: (v, r) => <ReturnsCell pctL6={v} pctP6={r.returns_pct_prev6} change={r.returns_change} /> },
     { k: 'status', l: 'סטטוס', r: v => <Badge status={v} sm /> },
     { k: 'qty_total', l: 'כמות\nכוללת', r: v => <span className="font-bold">{fmt(v)}</span> },
   ];
@@ -242,12 +244,16 @@ const StoresList = ({ stores, onSelect }) => {
       </div>
     </div>
     {showF && <div className="bg-white rounded-xl shadow p-4 print:hidden">
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         <MultiSelect label="עיר" opts={FILTERS.cities || []} selected={cities} onChange={setCities} />
         <MultiSelect label="רשת" opts={FILTERS.networks || []} selected={networks} onChange={setNetworks} />
         <MultiSelect label="נהג" opts={FILTERS.drivers || []} selected={drivers} onChange={setDrivers} />
         <MultiSelect label="סוכן" opts={FILTERS.agents || []} selected={agents} onChange={setAgents} />
         <MultiSelect label="סטטוס" opts={['צמיחה','יציב','התאוששות','ירידה מתונה','התרסקות']} selected={statuses} onChange={setStatuses} />
+        <div>
+          <label className="text-xs text-gray-600 block mb-1">מינימום פריטים</label>
+          <input type="number" value={minQty || ''} onChange={e => setMinQty(Number(e.target.value) || 0)} placeholder="0" className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+        </div>
       </div>
     </div>}
     <Table data={filtered} cols={cols} onRow={onSelect} name="stores" />
@@ -282,12 +288,12 @@ const StoreDetail = ({ store, onBack }) => {
       </div>
     </div>
     <div className="grid grid-cols-3 lg:grid-cols-6 gap-3">
-      <MBox label="12/12 (2024↔2025)" value={store.metric_12v12} sub={fmt(store.qty_2024) + '→' + fmt(store.qty_2025)} />
-      <MBox label="6/6 (H1↔H2 2025)" value={store.metric_6v6} sub={fmt(store.qty_prev6) + '→' + fmt(store.qty_last6)} />
-      <MBox label="3/3 (Q3↔Q4 2025)" value={store.metric_3v3} sub={fmt(store.qty_prev3) + '→' + fmt(store.qty_last3)} />
-      <MBox label="2/2 (ספט-אוק↔נוב-דצמ)" value={store.metric_2v2} sub={fmt(store.qty_prev2) + '→' + fmt(store.qty_last2)} />
+      <MBox label="שנתי (ינו-דצמ 24→25)" value={store.metric_12v12} sub={fmt(store.qty_2024) + '→' + fmt(store.qty_2025)} />
+      <MBox label="6 חודשים (ינו-יונ→יול-דצמ)" value={store.metric_6v6} sub={fmt(store.qty_prev6) + '→' + fmt(store.qty_last6)} />
+      <MBox label="3 חודשים (יול-ספט→אוק-דצמ)" value={store.metric_3v3} sub={fmt(store.qty_prev3) + '→' + fmt(store.qty_last3)} />
+      <MBox label="2 חודשים (ספט-אוק→נוב-דצמ)" value={store.metric_2v2} sub={fmt(store.qty_prev2) + '→' + fmt(store.qty_last2)} />
       <MBox label="מרחק מהשיא" value={store.metric_peak_distance} extra={'עכשיו: ' + fmt(store.current_value) + ' | שיא: ' + fmt(store.peak_value) + ' (' + fmtMonthHeb(store.peak_month) + ')'} />
-      <MBox label="חזרות % (H1↔H2)" value={(store.returns_pct_prev6?.toFixed(1) || 0) + '%→' + (store.returns_pct_last6?.toFixed(1) || 0) + '%'} sub={'שינוי: ' + (store.returns_change > 0 ? '+' : '') + (store.returns_change?.toFixed(1) || 0) + '%'} pos={store.returns_change <= 0} />
+      <MBox label="חזרות % (ינו-יונ→יול-דצמ)" value={(store.returns_pct_prev6?.toFixed(1) || 0) + '%→' + (store.returns_pct_last6?.toFixed(1) || 0) + '%'} sub={'שינוי: ' + (store.returns_change > 0 ? '+' : '') + (store.returns_change?.toFixed(1) || 0) + '%'} pos={store.returns_change <= 0} />
     </div>
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       <div className="bg-white rounded-xl shadow p-4 text-center"><p className="text-sm text-gray-500">כמות 2024</p><p className="text-2xl font-bold text-blue-600">{fmt(store.qty_2024)}</p></div>
@@ -303,20 +309,22 @@ const StoreDetail = ({ store, onBack }) => {
 const ProductsList = ({ products, onSelect }) => {
   const [cats, setCats] = useState([]);
   const [statuses, setStatuses] = useState([]);
+  const [minQty, setMinQty] = useState(0);
   
   const filtered = useMemo(() => products.filter(p => { 
     if (cats.length && !cats.includes(p.category)) return false; 
-    if (statuses.length && !statuses.includes(p.status)) return false; 
+    if (statuses.length && !statuses.includes(p.status)) return false;
+    if (minQty > 0 && (p.qty_total || 0) < minQty) return false;
     return true; 
-  }), [products, cats, statuses]);
+  }), [products, cats, statuses, minQty]);
   
   const cols = [
     { k: 'name', l: 'מוצר', r: (v, r) => <div><p className="font-medium">{v}</p><p className="text-xs text-gray-500">{r.category}</p></div> },
-    { k: 'metric_12v12', l: '12/12\n(2024↔2025)', r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
-    { k: 'metric_6v6', l: '6/6\n(H1↔H2)', r: (v, r) => <MetricCell pct={v} from={r.qty_prev6} to={r.qty_last6} /> },
-    { k: 'metric_3v3', l: '3/3\n(Q3↔Q4)', r: (v, r) => <MetricCell pct={v} from={r.qty_prev3} to={r.qty_last3} /> },
+    { k: 'metric_12v12', l: 'שנתי\nינו-דצמ 24→25', r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
+    { k: 'metric_6v6', l: '6 חודשים\nינו-יונ→יול-דצמ', r: (v, r) => <MetricCell pct={v} from={r.qty_prev6} to={r.qty_last6} /> },
+    { k: 'metric_3v3', l: '3 חודשים\nיול-ספט→אוק-דצמ', r: (v, r) => <MetricCell pct={v} from={r.qty_prev3} to={r.qty_last3} /> },
     { k: 'metric_peak_distance', l: 'מרחק מהשיא', r: (v, r) => <PeakCell pct={v} peak={r.peak_value} peakMonth={r.peak_month} current={r.current_value} /> },
-    { k: 'returns_pct_last6', l: 'חזרות %\n(H1↔H2)', r: (v, r) => <ReturnsCell pctL6={v} pctP6={r.returns_pct_prev6} change={r.returns_change} /> },
+    { k: 'returns_pct_last6', l: 'חזרות %\nינו-יונ→יול-דצמ', r: (v, r) => <ReturnsCell pctL6={v} pctP6={r.returns_pct_prev6} change={r.returns_change} /> },
     { k: 'status', l: 'סטטוס', r: v => <Badge status={v} sm /> },
     { k: 'total_sales', l: 'מחזור', r: v => <span className="font-bold text-gray-600">₪{fmt(v)}</span> },
     { k: 'qty_total', l: 'כמות', r: v => <span className="font-bold">{fmt(v)}</span> },
@@ -329,6 +337,9 @@ const ProductsList = ({ products, onSelect }) => {
         <button onClick={() => exportPDF('מוצרים - Baron Analytics')} className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl text-sm"><FileText size={16}/>PDF</button>
         <MultiSelect opts={FILTERS.categories || []} selected={cats} onChange={setCats} placeholder="קטגוריה" />
         <MultiSelect opts={['צמיחה','יציב','התאוששות','ירידה מתונה','התרסקות']} selected={statuses} onChange={setStatuses} placeholder="סטטוס" />
+        <div className="flex items-center gap-2">
+          <input type="number" value={minQty || ''} onChange={e => setMinQty(Number(e.target.value) || 0)} placeholder="מינ׳ פריטים" className="w-28 px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+        </div>
       </div>
     </div>
     <Table data={filtered} cols={cols} onRow={onSelect} name="products" />
@@ -336,14 +347,16 @@ const ProductsList = ({ products, onSelect }) => {
 };
 
 const ProductDetail = ({ product, onBack }) => {
+  const [minQty, setMinQty] = useState(0);
   const chart = useMemo(() => { if (!product.monthly_qty) return []; return Object.entries(product.monthly_qty).sort(([a],[b]) => Number(a)-Number(b)).map(([m,v]) => ({ month: fmtMonth(m), qty: v })); }, [product]);
-  const stores = PRODUCT_STORES[String(product.id)] || [];
+  const allStores = PRODUCT_STORES[String(product.id)] || [];
+  const stores = useMemo(() => minQty > 0 ? allStores.filter(s => (s.qty_total || 0) >= minQty) : allStores, [allStores, minQty]);
   
   const storeCols = [
     { k: 'name', l: 'חנות', r: (v, r) => <div><p className="font-medium">{v}</p><p className="text-xs text-gray-500">{r.city}</p></div> },
-    { k: 'metric_12v12', l: '12/12', r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
-    { k: 'metric_6v6', l: '6/6', r: v => <span className={'font-bold ' + (v >= 0 ? 'text-emerald-600' : 'text-red-600')}>{fmtPct(v)}</span> },
-    { k: 'metric_3v3', l: '3/3', r: v => <span className={'font-bold ' + (v >= 0 ? 'text-emerald-600' : 'text-red-600')}>{fmtPct(v)}</span> },
+    { k: 'metric_12v12', l: 'שנתי\n24→25', r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
+    { k: 'metric_6v6', l: '6 חודשים', r: v => <span className={'font-bold ' + (v >= 0 ? 'text-emerald-600' : 'text-red-600')}>{fmtPct(v)}</span> },
+    { k: 'metric_3v3', l: '3 חודשים', r: v => <span className={'font-bold ' + (v >= 0 ? 'text-emerald-600' : 'text-red-600')}>{fmtPct(v)}</span> },
     { k: 'status', l: 'סטטוס', r: v => <Badge status={v} sm /> },
     { k: 'qty_total', l: 'כמות', r: v => <span className="font-bold">{fmt(v)}</span> },
   ];
@@ -360,12 +373,12 @@ const ProductDetail = ({ product, onBack }) => {
       </div>
     </div>
     <div className="grid grid-cols-3 lg:grid-cols-6 gap-3">
-      <MBox label="12/12 (2024↔2025)" value={product.metric_12v12} sub={fmt(product.qty_2024) + '→' + fmt(product.qty_2025)} />
-      <MBox label="6/6 (H1↔H2)" value={product.metric_6v6} sub={fmt(product.qty_prev6) + '→' + fmt(product.qty_last6)} />
-      <MBox label="3/3 (Q3↔Q4)" value={product.metric_3v3} sub={fmt(product.qty_prev3) + '→' + fmt(product.qty_last3)} />
-      <MBox label="2/2" value={product.metric_2v2} sub={fmt(product.qty_prev2) + '→' + fmt(product.qty_last2)} />
+      <MBox label="שנתי (ינו-דצמ 24→25)" value={product.metric_12v12} sub={fmt(product.qty_2024) + '→' + fmt(product.qty_2025)} />
+      <MBox label="6 חודשים (ינו-יונ→יול-דצמ)" value={product.metric_6v6} sub={fmt(product.qty_prev6) + '→' + fmt(product.qty_last6)} />
+      <MBox label="3 חודשים (יול-ספט→אוק-דצמ)" value={product.metric_3v3} sub={fmt(product.qty_prev3) + '→' + fmt(product.qty_last3)} />
+      <MBox label="2 חודשים (ספט-אוק→נוב-דצמ)" value={product.metric_2v2} sub={fmt(product.qty_prev2) + '→' + fmt(product.qty_last2)} />
       <MBox label="מרחק מהשיא" value={product.metric_peak_distance} extra={'עכשיו: ' + fmt(product.current_value) + ' | שיא: ' + fmt(product.peak_value) + ' (' + fmtMonthHeb(product.peak_month) + ')'} />
-      <MBox label="חזרות % (H1↔H2)" value={(product.returns_pct_prev6?.toFixed(1) || 0) + '%→' + (product.returns_pct_last6?.toFixed(1) || 0) + '%'} sub={'שינוי: ' + (product.returns_change > 0 ? '+' : '') + (product.returns_change?.toFixed(1) || 0) + '%'} pos={product.returns_change <= 0} />
+      <MBox label="חזרות % (ינו-יונ→יול-דצמ)" value={(product.returns_pct_prev6?.toFixed(1) || 0) + '%→' + (product.returns_pct_last6?.toFixed(1) || 0) + '%'} sub={'שינוי: ' + (product.returns_change > 0 ? '+' : '') + (product.returns_change?.toFixed(1) || 0) + '%'} pos={product.returns_change <= 0} />
     </div>
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       <div className="bg-white rounded-xl shadow p-4 text-center"><p className="text-sm text-gray-500">כמות 2024</p><p className="text-2xl font-bold text-blue-600">{fmt(product.qty_2024)}</p></div>
@@ -374,7 +387,16 @@ const ProductDetail = ({ product, onBack }) => {
       <div className="bg-white rounded-xl shadow p-4 text-center"><p className="text-sm text-gray-500">מחזור</p><p className="text-xl font-bold text-gray-600">₪{fmt(product.total_sales)}</p></div>
     </div>
     <div className="bg-white rounded-2xl shadow-lg p-6 border"><h3 className="text-lg font-bold mb-4">מגמת כמויות: ינו 2024 - דצמ 2025</h3><ResponsiveContainer width="100%" height={250}><AreaChart data={chart}><defs><linearGradient id="pg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/><stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" tick={{fontSize:10}} /><YAxis tickFormatter={v => fmt(v)} tick={{fontSize:10}} /><Tooltip formatter={v => fmt(v)} /><Area type="monotone" dataKey="qty" stroke="#8b5cf6" fill="url(#pg)" name="כמות" /></AreaChart></ResponsiveContainer></div>
-    <div className="bg-white rounded-2xl shadow-lg p-6 border"><h3 className="text-lg font-bold mb-4">חנויות שמוכרות ({stores.length})</h3>{stores.length > 0 ? <Table data={stores} cols={storeCols} name={'product_' + product.id + '_stores'} compact /> : <p className="text-gray-500 text-center py-8">אין נתונים</p>}</div>
+    <div className="bg-white rounded-2xl shadow-lg p-6 border">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-bold">חנויות שמוכרות ({stores.length}{minQty > 0 ? ` מתוך ${allStores.length}` : ''})</h3>
+        <div className="flex items-center gap-2 print:hidden">
+          <label className="text-sm text-gray-600">מינימום פריטים:</label>
+          <input type="number" value={minQty || ''} onChange={e => setMinQty(Number(e.target.value) || 0)} placeholder="0" className="w-24 px-3 py-1.5 border border-gray-200 rounded-lg text-sm" />
+        </div>
+      </div>
+      {stores.length > 0 ? <Table data={stores} cols={storeCols} name={'product_' + product.id + '_stores'} compact /> : <p className="text-gray-500 text-center py-8">אין נתונים</p>}
+    </div>
   </div>);
 };
 
@@ -394,7 +416,7 @@ const Alerts = ({ stores, onSelect }) => {
           <Badge status={s.status} sm />
         </div>
         <div className="grid grid-cols-3 gap-3 text-center">
-          <div className="bg-red-50 rounded-lg p-2"><p className="text-xs text-gray-500">12/12 (2024↔2025)</p><p className="font-bold text-red-600">{fmtPct(s.metric_12v12)}</p></div>
+          <div className="bg-red-50 rounded-lg p-2"><p className="text-xs text-gray-500">שנתי (24→25)</p><p className="font-bold text-red-600">{fmtPct(s.metric_12v12)}</p></div>
           <div className="bg-red-50 rounded-lg p-2"><p className="text-xs text-gray-500">ירידה רצופה</p><p className="font-bold text-red-600">{s.declining_months || 0} חודשים</p>{s.declining_months_list && s.declining_months_list.length > 0 && <p className="text-xs text-gray-400 mt-1">{s.declining_months_list.slice(-3).reverse().map(m => fmtMonth(m)).join('→')}</p>}</div>
           <div className="bg-red-50 rounded-lg p-2"><p className="text-xs text-gray-500">מרחק מהשיא</p><p className="font-bold text-red-600">{fmtPct(s.metric_peak_distance)}</p><p className="text-xs text-gray-400">עכשיו: {fmt(s.current_value)}</p></div>
         </div>
