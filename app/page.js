@@ -301,38 +301,138 @@ const CityIndicator = ({ store, allStores }) => {
     if (cityStores.length < 2) return null;
     const statusCounts = {};
     cityStores.forEach(s => { statusCounts[s.status] = (statusCounts[s.status] || 0) + 1; });
+    
+    // Sort for rankings
     const byLongTerm = [...cityStores].sort((a, b) => (b.metric_long_term || 0) - (a.metric_long_term || 0));
     const byShortTerm = [...cityStores].sort((a, b) => (b.metric_short_term || 0) - (a.metric_short_term || 0));
     const byQty = [...cityStores].sort((a, b) => (b.qty_total || 0) - (a.qty_total || 0));
+    
+    // Calculate averages
+    const avgLongTerm = cityStores.reduce((s, x) => s + (x.metric_long_term || 0), 0) / cityStores.length;
+    const avgShortTerm = cityStores.reduce((s, x) => s + (x.metric_short_term || 0), 0) / cityStores.length;
+    const avgQty = cityStores.reduce((s, x) => s + (x.qty_total || 0), 0) / cityStores.length;
+    
+    // Get ranks
+    const longTermRank = byLongTerm.findIndex(s => s.id === store.id) + 1;
+    const shortTermRank = byShortTerm.findIndex(s => s.id === store.id) + 1;
+    const qtyRank = byQty.findIndex(s => s.id === store.id) + 1;
+    
+    // Calculate percentiles (how many stores this one beats)
+    const longTermPct = Math.round(((cityStores.length - longTermRank) / cityStores.length) * 100);
+    const shortTermPct = Math.round(((cityStores.length - shortTermRank) / cityStores.length) * 100);
+    const qtyPct = Math.round(((cityStores.length - qtyRank) / cityStores.length) * 100);
+    
     return {
       city: store.city,
       total: cityStores.length,
       statusCounts,
-      longTermRank: byLongTerm.findIndex(s => s.id === store.id) + 1,
-      shortTermRank: byShortTerm.findIndex(s => s.id === store.id) + 1,
-      qtyRank: byQty.findIndex(s => s.id === store.id) + 1
+      longTermRank, shortTermRank, qtyRank,
+      longTermPct, shortTermPct, qtyPct,
+      avgLongTerm, avgShortTerm, avgQty,
+      storeLongTerm: store.metric_long_term || 0,
+      storeShortTerm: store.metric_short_term || 0,
+      storeQty: store.qty_total || 0
     };
   }, [store, allStores]);
   
   if (!cityData) return null;
   
+  const RankingCard = ({ title, icon, rank, total, value, avg, pct, color, formatValue }) => {
+    const isAboveAvg = formatValue === 'pct' ? value >= avg : value >= avg;
+    const barColor = pct >= 70 ? 'bg-emerald-500' : pct >= 40 ? 'bg-amber-500' : 'bg-red-500';
+    
+    return (
+      <div className="bg-white rounded-xl p-4 shadow-sm border">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-lg">{icon}</span>
+          <h4 className="font-bold text-gray-700 text-sm">{title}</h4>
+        </div>
+        
+        <div className="text-center mb-3">
+          <span className={`text-3xl font-bold ${color}`}>#{rank}</span>
+          <p className="text-xs text-gray-500">מתוך {total} חנויות בעיר</p>
+        </div>
+        
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between items-center">
+            <span className="text-gray-600">הערך שלך:</span>
+            <span className={`font-bold ${isAboveAvg ? 'text-emerald-600' : 'text-red-600'}`}>
+              {formatValue === 'pct' ? fmtPct(value) : fmt(value)}
+            </span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-gray-600">ממוצע עיר:</span>
+            <span className="font-medium text-gray-700">
+              {formatValue === 'pct' ? fmtPct(avg) : fmt(avg)}
+            </span>
+          </div>
+        </div>
+        
+        <div className="mt-3">
+          <div className="flex justify-between text-xs text-gray-500 mb-1">
+            <span>אחוזון</span>
+            <span>{pct}%</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div className={`${barColor} h-2 rounded-full transition-all`} style={{ width: `${pct}%` }}></div>
+          </div>
+          <p className="text-xs text-gray-500 mt-1 text-center">
+            {pct >= 50 ? `טוב יותר מ-${pct}% מהחנויות` : `נמוך מ-${100-pct}% מהחנויות`}
+          </p>
+        </div>
+      </div>
+    );
+  };
+  
   return (
     <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-5 border border-blue-200 print:hidden">
-      <div className="flex items-center gap-2 mb-3">
-        <MapPin className="text-blue-600" size={20} />
-        <h3 className="text-lg font-bold text-blue-800">{cityData.city}</h3>
-        <span className="text-sm text-gray-600">- {cityData.total} חנויות</span>
+      <div className="flex items-center gap-2 mb-4">
+        <MapPin className="text-blue-600" size={22} />
+        <h3 className="text-lg font-bold text-blue-800">השוואה לחנויות ב{cityData.city}</h3>
+        <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-sm font-medium">{cityData.total} חנויות</span>
       </div>
+      
       <div className="flex flex-wrap gap-2 mb-4">
         {Object.entries(cityData.statusCounts).map(([status, count]) => {
           const cfg = STATUS_CFG[status] || STATUS_CFG['יציב'];
           return <span key={status} className={`${cfg.bg} ${cfg.text} px-2 py-1 rounded-full text-xs font-medium`}>{status}: {count}</span>;
         })}
       </div>
-      <div className="grid grid-cols-3 gap-3">
-        <div className="bg-white rounded-xl p-3 text-center shadow-sm"><p className="text-xs text-gray-500 mb-1">דירוג טווח ארוך</p><p className="text-xl font-bold text-blue-600">#{cityData.longTermRank}</p><p className="text-xs text-gray-400">מתוך {cityData.total}</p></div>
-        <div className="bg-white rounded-xl p-3 text-center shadow-sm"><p className="text-xs text-gray-500 mb-1">דירוג טווח קצר</p><p className="text-xl font-bold text-emerald-600">#{cityData.shortTermRank}</p><p className="text-xs text-gray-400">מתוך {cityData.total}</p></div>
-        <div className="bg-white rounded-xl p-3 text-center shadow-sm"><p className="text-xs text-gray-500 mb-1">דירוג כמות פריטים</p><p className="text-xl font-bold text-purple-600">#{cityData.qtyRank}</p><p className="text-xs text-gray-400">מתוך {cityData.total}</p></div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <RankingCard 
+          title="דירוג טווח ארוך" 
+          icon="📈" 
+          rank={cityData.longTermRank} 
+          total={cityData.total}
+          value={cityData.storeLongTerm}
+          avg={cityData.avgLongTerm}
+          pct={cityData.longTermPct}
+          color="text-blue-600"
+          formatValue="pct"
+        />
+        <RankingCard 
+          title="דירוג טווח קצר" 
+          icon="⚡" 
+          rank={cityData.shortTermRank} 
+          total={cityData.total}
+          value={cityData.storeShortTerm}
+          avg={cityData.avgShortTerm}
+          pct={cityData.shortTermPct}
+          color="text-emerald-600"
+          formatValue="pct"
+        />
+        <RankingCard 
+          title="דירוג כמות פריטים" 
+          icon="📦" 
+          rank={cityData.qtyRank} 
+          total={cityData.total}
+          value={cityData.storeQty}
+          avg={cityData.avgQty}
+          pct={cityData.qtyPct}
+          color="text-purple-600"
+          formatValue="num"
+        />
       </div>
     </div>
   );
@@ -617,16 +717,10 @@ const SettingsPage = () => {
   </div>);
 };
 
-// Baron Logo Component
+// Baron Logo Component - using actual image
 const BaronLogo = () => (
   <div className="flex items-center gap-3">
-    <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#7B5B3F' }}>
-      <span className="text-white font-bold text-lg" style={{ fontFamily: 'serif' }}>ב</span>
-    </div>
-    <div>
-      <h1 className="text-xl font-bold" style={{ color: '#7B5B3F' }}>ברון</h1>
-      <p className="text-[10px] text-gray-500">מאז 1993 • ניתוח מכירות</p>
-    </div>
+    <img src="/baron-logo.png" alt="ברון" className="h-10 w-auto" />
   </div>
 );
 
