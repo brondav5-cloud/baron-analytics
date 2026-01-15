@@ -16,15 +16,25 @@ const STATUS_CFG = {
   'התרסקות': { bg: 'bg-red-50', text: 'text-red-600', Icon: TrendingDown },
 };
 
-const Tip = ({ text }) => (
-  <div className="relative inline-block group mr-1">
-    <HelpCircle size={14} className="text-gray-400 hover:text-blue-500 cursor-help" />
-    <div className="absolute z-50 bottom-full right-0 mb-2 hidden group-hover:block w-48 p-2 bg-gray-800 text-white text-xs rounded-lg shadow-lg">
-      {text}
-      <div className="absolute top-full right-2 border-4 border-transparent border-t-gray-800"></div>
+const Tip = ({ text }) => {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative inline-block mr-1">
+      <HelpCircle 
+        size={14} 
+        className="text-gray-400 hover:text-blue-500 cursor-help" 
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+      />
+      {show && (
+        <div className="absolute z-[100] bottom-full right-0 mb-2 w-52 p-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl whitespace-normal">
+          {text}
+          <div className="absolute top-full right-2 border-4 border-transparent border-t-gray-900"></div>
+        </div>
+      )}
     </div>
-  </div>
-);
+  );
+};
 
 const METRIC_TIPS = {
   '12v12': 'השוואת סך הכמות בכל 2024 מול כל 2025',
@@ -241,7 +251,7 @@ const StoresList = ({ stores, onSelect }) => {
     if (drivers.length && !drivers.includes(s.driver)) return false;
     if (agents.length && !agents.includes(s.agent)) return false;
     if (statuses.length && !statuses.includes(s.status)) return false;
-    if (minQty > 0 && (s.qty_total || 0) < minQty) return false;
+    if (minQty > 0 && (s.qty_2025 || 0) < minQty) return false;
     return true;
   }), [stores, cities, networks, drivers, agents, statuses, minQty]);
   
@@ -272,7 +282,7 @@ const StoresList = ({ stores, onSelect }) => {
         <MultiSelect label="סוכן" opts={FILTERS.agents || []} selected={agents} onChange={setAgents} />
         <MultiSelect label="סטטוס" opts={['צמיחה','יציב','התאוששות','ירידה מתונה','התרסקות']} selected={statuses} onChange={setStatuses} />
         <div>
-          <label className="text-xs text-gray-600 block mb-1">מינימום פריטים (כולל)</label>
+          <label className="text-xs text-gray-600 block mb-1">מינימום פריטים (2025)</label>
           <input type="number" value={minQty || ''} onChange={e => setMinQty(Number(e.target.value) || 0)} placeholder="0" className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
         </div>
       </div>
@@ -335,7 +345,7 @@ const ProductsList = ({ products, onSelect }) => {
   const filtered = useMemo(() => products.filter(p => { 
     if (cats.length && !cats.includes(p.category)) return false; 
     if (statuses.length && !statuses.includes(p.status)) return false;
-    if (minQty > 0 && (p.qty_total || 0) < minQty) return false;
+    if (minQty > 0 && (p.qty_2025 || 0) < minQty) return false;
     return true; 
   }), [products, cats, statuses, minQty]);
   
@@ -359,7 +369,7 @@ const ProductsList = ({ products, onSelect }) => {
         <MultiSelect opts={FILTERS.categories || []} selected={cats} onChange={setCats} placeholder="קטגוריה" />
         <MultiSelect opts={['צמיחה','יציב','התאוששות','ירידה מתונה','התרסקות']} selected={statuses} onChange={setStatuses} placeholder="סטטוס" />
         <div className="flex items-center gap-2">
-          <input type="number" value={minQty || ''} onChange={e => setMinQty(Number(e.target.value) || 0)} placeholder="מינ׳ (כולל)" className="w-28 px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+          <input type="number" value={minQty || ''} onChange={e => setMinQty(Number(e.target.value) || 0)} placeholder="מינ׳ 2025" className="w-28 px-3 py-2 border border-gray-200 rounded-xl text-sm" />
         </div>
       </div>
     </div>
@@ -371,7 +381,7 @@ const ProductDetail = ({ product, onBack }) => {
   const [minQty, setMinQty] = useState(0);
   const chart = useMemo(() => { if (!product.monthly_qty) return []; return Object.entries(product.monthly_qty).sort(([a],[b]) => Number(a)-Number(b)).map(([m,v]) => ({ month: fmtMonth(m), qty: v })); }, [product]);
   const allStores = PRODUCT_STORES[String(product.id)] || [];
-  const stores = useMemo(() => minQty > 0 ? allStores.filter(s => (s.qty_total || 0) >= minQty) : allStores, [allStores, minQty]);
+  const stores = useMemo(() => minQty > 0 ? allStores.filter(s => (s.qty_2025 || 0) >= minQty) : allStores, [allStores, minQty]);
   
   const storeCols = [
     { k: 'name', l: 'חנות', r: (v, r) => <div><p className="font-medium">{v}</p><p className="text-xs text-gray-500">{r.city}</p></div> },
@@ -412,7 +422,7 @@ const ProductDetail = ({ product, onBack }) => {
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-bold">חנויות שמוכרות ({stores.length}{minQty > 0 ? ` מתוך ${allStores.length}` : ''})</h3>
         <div className="flex items-center gap-2 print:hidden">
-          <label className="text-sm text-gray-600">מינימום פריטים (כולל):</label>
+          <label className="text-sm text-gray-600">מינימום פריטים (2025):</label>
           <input type="number" value={minQty || ''} onChange={e => setMinQty(Number(e.target.value) || 0)} placeholder="0" className="w-24 px-3 py-1.5 border border-gray-200 rounded-lg text-sm" />
         </div>
       </div>
