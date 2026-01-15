@@ -1,39 +1,58 @@
 'use client';
 import React, { useState, useMemo, useEffect } from 'react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, Legend } from 'recharts';
-import { TrendingUp, TrendingDown, Store, Package, AlertTriangle, Award, XCircle, Search, Download, Filter, ChevronRight, ArrowUp, ArrowDown, Minus, Menu, X, Home, Bell, LogOut, User, Check, FileText, ChevronDown, Settings, HelpCircle, MapPin } from 'lucide-react';
+import { TrendingUp, TrendingDown, Store, Package, AlertTriangle, Award, XCircle, Search, Download, Filter, ChevronRight, ArrowUp, ArrowDown, Minus, Menu, X, Home, Bell, LogOut, User, Check, FileText, ChevronDown, Settings, HelpCircle, MapPin, ChevronLeft, AlertCircle } from 'lucide-react';
 import STORES_RAW from './stores.json';
 import PRODUCTS_RAW from './products.json';
 import FILTERS from './filters.json';
 import STORE_PRODUCTS from './store_products.json';
 import PRODUCT_STORES from './product_stores.json';
 
-const calcStatus = (item, config) => {
-  const longTerm = item.metric_long_term || 0;
-  const shortTerm = item.metric_short_term || 0;
-  const peakDist = item.metric_peak_distance || 0;
-  const declining = item.declining_months || 0;
-  if (longTerm < config.crash_12v12 || peakDist < config.crash_peak || declining >= config.crash_months) return 'התרסקות';
-  if (longTerm < config.decline_12v12 || declining >= config.decline_months) return 'ירידה מתונה';
-  if (longTerm >= config.growth_12v12 && shortTerm >= config.growth_short) return 'צמיחה';
-  if (longTerm >= config.stable_min && longTerm <= config.stable_max) return 'יציב';
-  if (longTerm < 0 && shortTerm >= config.recovery_threshold) return 'התאוששות';
-  return 'יציב';
+// Calculate LONG TERM status (based on yearly, 6m, 3m)
+const calcLongTermStatus = (item, config) => {
+  const longTerm = item.metric_long_term || item.metric_12v12 || 0;
+  if (longTerm >= config.long_growth) return 'צמיחה';
+  if (longTerm >= config.long_stable_min && longTerm <= config.long_stable_max) return 'יציב';
+  if (longTerm >= config.long_decline) return 'ירידה';
+  return 'קריטי';
+};
+
+// Calculate SHORT TERM status (based on 2 months only - alert system)
+const calcShortTermStatus = (item, config) => {
+  const shortTerm = item.metric_2v2 || item.metric_short_term || 0;
+  if (shortTerm >= config.short_surge) return 'עלייה חדה';
+  if (shortTerm >= config.short_stable_min) return 'יציב';
+  if (shortTerm >= config.short_decline) return 'ירידה';
+  return 'אזעקה';
 };
 
 const applyConfig = (items, config) => items.map(item => ({
   ...item,
-  status: calcStatus(item, config),
-  is_recovering: item.metric_long_term < 0 && item.metric_short_term >= config.recovery_threshold
+  status_long: calcLongTermStatus(item, config),
+  status_short: calcShortTermStatus(item, config),
+  // Keep old status for backward compatibility
+  status: calcLongTermStatus(item, config),
+  is_recovering: (item.metric_long_term || item.metric_12v12 || 0) < 0 && (item.metric_2v2 || item.metric_short_term || 0) >= config.short_surge
 }));
 
-const STATUS_CFG = {
-  'צמיחה': { bg: 'bg-emerald-50', text: 'text-emerald-600', Icon: TrendingUp },
-  'יציב': { bg: 'bg-blue-50', text: 'text-blue-600', Icon: Minus },
-  'התאוששות': { bg: 'bg-amber-50', text: 'text-amber-600', Icon: TrendingUp },
-  'ירידה מתונה': { bg: 'bg-orange-50', text: 'text-orange-600', Icon: TrendingDown },
-  'התרסקות': { bg: 'bg-red-50', text: 'text-red-600', Icon: TrendingDown },
+// Long term status config
+const STATUS_LONG_CFG = {
+  'צמיחה': { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-300', Icon: TrendingUp },
+  'יציב': { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-300', Icon: Minus },
+  'ירידה': { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-300', Icon: TrendingDown },
+  'קריטי': { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', Icon: AlertTriangle },
 };
+
+// Short term status config (alerts)
+const STATUS_SHORT_CFG = {
+  'עלייה חדה': { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-300', Icon: TrendingUp, emoji: '🚀' },
+  'יציב': { bg: 'bg-gray-100', text: 'text-gray-600', border: 'border-gray-300', Icon: Minus, emoji: '✅' },
+  'ירידה': { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-300', Icon: TrendingDown, emoji: '⚠️' },
+  'אזעקה': { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', Icon: AlertCircle, emoji: '🚨' },
+};
+
+// Keep old config for backwards compatibility
+const STATUS_CFG = STATUS_LONG_CFG;
 
 const Tip = ({ text }) => {
   const [show, setShow] = useState(false);
@@ -58,12 +77,14 @@ const METRIC_TIPS = {
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#f97316', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
 
-// Helper to calculate short-term status
-const getShortTermStatus = (shortTerm) => {
-  if (shortTerm >= 10) return 'צמיחה';
-  if (shortTerm >= 0) return 'יציב';
-  if (shortTerm >= -10) return 'ירידה מתונה';
-  return 'התרסקות';
+// Helper to get short-term status (for filters)
+const getShortTermStatus = (item) => {
+  return item.status_short || 'יציב';
+};
+
+// Helper to get long-term status (for filters)
+const getLongTermStatus = (item) => {
+  return item.status_long || 'יציב';
 };
 
 // Auth helpers
@@ -131,17 +152,27 @@ const fmtPct = n => n != null ? (n > 0 ? '+' : '') + n.toFixed(1) + '%' : '-';
 const fmtMonth = m => { const s = String(m); return s.slice(4) + '/' + s.slice(2,4); };
 const fmtMonthHeb = m => { if (!m) return '-'; const ms = ['','ינו','פבר','מרץ','אפר','מאי','יונ','יול','אוג','ספט','אוק','נוב','דצמ']; const s = String(m); return ms[parseInt(s.slice(4))] + ' ' + s.slice(0,4); };
 
-const Badge = ({ status, sm }) => { const c = STATUS_CFG[status] || STATUS_CFG['יציב']; return <span className={`inline-flex items-center gap-1 rounded-full font-medium ${c.bg} ${c.text} ${sm ? 'px-2 py-0.5 text-xs' : 'px-3 py-1 text-sm'}`}><c.Icon size={sm ? 12 : 14} />{status}</span>; };
+const Badge = ({ status, sm }) => { const c = STATUS_LONG_CFG[status] || STATUS_LONG_CFG['יציב']; return <span className={`inline-flex items-center gap-1 rounded-full font-medium ${c.bg} ${c.text} ${sm ? 'px-2 py-0.5 text-xs' : 'px-3 py-1 text-sm'}`}><c.Icon size={sm ? 12 : 14} />{status}</span>; };
 
-const StatusBadge = ({ status, recovery, shortTerm, sm }) => {
-  const c = STATUS_CFG[status] || STATUS_CFG['יציב'];
-  const shortStatus = shortTerm >= 10 ? 'צמיחה' : shortTerm >= 0 ? 'יציב' : shortTerm >= -10 ? 'ירידה מתונה' : 'התרסקות';
-  const sc = STATUS_CFG[shortStatus] || STATUS_CFG['יציב'];
+// Long Term Status Badge
+const LongTermBadge = ({ status, sm }) => {
+  const c = STATUS_LONG_CFG[status] || STATUS_LONG_CFG['יציב'];
+  return <span className={`inline-flex items-center gap-1 rounded-full font-medium ${c.bg} ${c.text} border ${c.border} ${sm ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-xs'}`}><c.Icon size={12} />{status}</span>;
+};
+
+// Short Term Status Badge (with emoji for alerts)
+const ShortTermBadge = ({ status, sm }) => {
+  const c = STATUS_SHORT_CFG[status] || STATUS_SHORT_CFG['יציב'];
+  return <span className={`inline-flex items-center gap-1 rounded-full font-medium ${c.bg} ${c.text} border ${c.border} ${sm ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-xs'}`}>{c.emoji} {status}</span>;
+};
+
+const StatusBadge = ({ item, sm }) => {
+  const longStatus = item?.status_long || 'יציב';
+  const shortStatus = item?.status_short || 'יציב';
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-1"><span className="text-[10px] text-gray-400">ארוך:</span><span className={`inline-flex items-center gap-1 rounded-full font-medium ${c.bg} ${c.text} px-2 py-0.5 text-xs`}><c.Icon size={10} />{status}</span></div>
-      <div className="flex items-center gap-1"><span className="text-[10px] text-gray-400">קצר:</span><span className={`inline-flex items-center gap-1 rounded-full font-medium ${sc.bg} ${sc.text} px-2 py-0.5 text-xs`}><sc.Icon size={10} />{shortStatus}</span></div>
-      {recovery && <span className="inline-flex items-center gap-1 rounded-full font-medium bg-amber-50 text-amber-600 px-2 py-0.5 text-xs"><TrendingUp size={10} />התאוששות</span>}
+      <LongTermBadge status={longStatus} sm={sm} />
+      <ShortTermBadge status={shortStatus} sm={sm} />
     </div>
   );
 };
@@ -208,11 +239,12 @@ const exportCSV = (data, columns, filename) => {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename + '.csv'; a.click();
 };
 
-// Table with sticky first column and 100 rows
+// Table with sticky first column, 100 rows, and improved horizontal scroll
 const Table = ({ data, cols, onRow, name = 'data', compact = false }) => {
   const [sort, setSort] = useState({ k: null, d: 'desc' });
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const scrollRef = React.useRef(null);
   const perPage = 100;
   const filtered = useMemo(() => {
     let r = data.filter(i => Object.values(i).some(v => String(v).toLowerCase().includes(search.toLowerCase())));
@@ -222,24 +254,32 @@ const Table = ({ data, cols, onRow, name = 'data', compact = false }) => {
   const pages = Math.ceil(filtered.length / perPage);
   const rows = filtered.slice((page - 1) * perPage, page * perPage);
   
-  return (<div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+  const scrollLeft = () => { if (scrollRef.current) scrollRef.current.scrollBy({ left: -200, behavior: 'smooth' }); };
+  const scrollRight = () => { if (scrollRef.current) scrollRef.current.scrollBy({ left: 200, behavior: 'smooth' }); };
+  
+  return (<div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden w-full">
     <div className="p-3 border-b flex flex-wrap gap-2 items-center justify-between print:hidden">
       <div className="relative flex-1 min-w-48"><Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} /><input type="text" placeholder="חיפוש..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="w-full pr-10 pl-4 py-2 border rounded-xl text-sm" /></div>
       <button onClick={() => exportCSV(filtered, cols, name)} className="flex items-center gap-1 px-3 py-2 bg-emerald-500 text-white rounded-xl text-sm"><Download size={16}/>Excel</button>
     </div>
-    <div className="overflow-x-auto">
-      <table className="w-full">
-        <thead className="bg-gray-50">
-          <tr>{cols.map((c, idx) => <th key={c.k} onClick={() => setSort(p => ({ k: c.k, d: p.k === c.k && p.d === 'desc' ? 'asc' : 'desc' }))} className={`px-3 py-3 text-right text-xs font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 whitespace-pre-line ${idx === 0 ? 'sticky right-0 bg-gray-50 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]' : ''}`}><span className="flex items-center gap-1">{c.t && <Tip text={c.t} />}{c.l}{sort.k === c.k && <span className="text-blue-500 mr-1">{sort.d === 'asc' ? '↑' : '↓'}</span>}</span></th>)}</tr>
-        </thead>
-        <tbody className="divide-y">{rows.map((r, i) => <tr key={r.id || i} onClick={() => onRow && onRow(r)} className={'hover:bg-blue-50 ' + (onRow ? 'cursor-pointer' : '')}>{cols.map((c, idx) => <td key={c.k} className={`px-3 text-sm whitespace-nowrap ${compact ? 'py-2' : 'py-3'} ${idx === 0 ? 'sticky right-0 bg-white z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]' : ''}`}>{c.r ? c.r(r[c.k], r) : r[c.k]}</td>)}</tr>)}</tbody>
-      </table>
+    <div className="relative">
+      {/* Scroll arrows for mobile */}
+      <button onClick={scrollRight} className="lg:hidden absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-white/90 shadow-lg rounded-r-lg p-2 hover:bg-gray-100 border border-l-0"><ChevronLeft size={20} className="text-gray-600" /></button>
+      <button onClick={scrollLeft} className="lg:hidden absolute right-12 top-1/2 -translate-y-1/2 z-20 bg-white/90 shadow-lg rounded-l-lg p-2 hover:bg-gray-100 border border-r-0"><ChevronRight size={20} className="text-gray-600" /></button>
+      <div ref={scrollRef} className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100" style={{ scrollbarWidth: 'thin' }}>
+        <table className="w-full min-w-max">
+          <thead className="bg-gray-50">
+            <tr>{cols.map((c, idx) => <th key={c.k} onClick={() => setSort(p => ({ k: c.k, d: p.k === c.k && p.d === 'desc' ? 'asc' : 'desc' }))} className={`px-3 py-3 text-right text-xs font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 whitespace-pre-line ${idx === 0 ? 'sticky right-0 bg-gray-50 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]' : ''}`}><span className="flex items-center gap-1">{c.t && <Tip text={c.t} />}{c.l}{sort.k === c.k && <span className="text-blue-500 mr-1">{sort.d === 'asc' ? '↑' : '↓'}</span>}</span></th>)}</tr>
+          </thead>
+          <tbody className="divide-y">{rows.map((r, i) => <tr key={r.id || i} onClick={() => onRow && onRow(r)} className={'hover:bg-blue-50 ' + (onRow ? 'cursor-pointer' : '')}>{cols.map((c, idx) => <td key={c.k} className={`px-3 text-sm whitespace-nowrap ${compact ? 'py-2' : 'py-3'} ${idx === 0 ? 'sticky right-0 bg-white z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]' : ''}`}>{c.r ? c.r(r[c.k], r) : r[c.k]}</td>)}</tr>)}</tbody>
+        </table>
+      </div>
     </div>
     <div className="p-3 border-t bg-gray-50 flex items-center justify-between text-sm print:hidden">
       <span>{filtered.length} רשומות</span>
       <div className="flex gap-2"><button onClick={() => setPage(p => Math.max(1, p-1))} disabled={page === 1} className="px-3 py-1 border rounded disabled:opacity-50">הקודם</button><span>{page}/{pages || 1}</span><button onClick={() => setPage(p => Math.min(pages, p+1))} disabled={page === pages} className="px-3 py-1 border rounded disabled:opacity-50">הבא</button></div>
     </div>
-  </div>);
+  </div>)
 };
 
 const Overview = ({ stores, products, onNav }) => {
@@ -322,14 +362,15 @@ const StoresList = ({ stores, onSelect }) => {
     if (networks.length && !networks.includes(s.network)) return false;
     if (drivers.length && !drivers.includes(s.driver)) return false;
     if (agents.length && !agents.includes(s.agent)) return false;
-    if (statusesLong.length && !statusesLong.includes(s.status)) return false;
-    if (statusesShort.length && !statusesShort.includes(getShortTermStatus(s.metric_short_term))) return false;
+    if (statusesLong.length && !statusesLong.includes(s.status_long)) return false;
+    if (statusesShort.length && !statusesShort.includes(s.status_short)) return false;
     if (minQty > 0 && (s.qty_2025 || 0) < minQty) return false;
     return true;
   }), [stores, cities, networks, drivers, agents, statusesLong, statusesShort, minQty]);
   
   const cols = [
     { k: 'name', l: 'חנות', r: (v, r) => <div><p className="font-medium">{v}</p><p className="text-xs text-gray-500">{r.city}</p></div> },
+    { k: 'status_long', l: 'סטטוס', r: (v, r) => <StatusBadge item={r} /> },
     { k: 'metric_long_term', l: 'טווח ארוך', t: METRIC_TIPS['long_term'], r: (v) => <LongTermCell value={v} /> },
     { k: 'metric_short_term', l: 'טווח קצר', t: METRIC_TIPS['short_term'], r: (v, r) => <ShortTermCell value={v} ok={r.short_term_ok} /> },
     { k: 'metric_12v12', l: 'שנתי\n24→25', t: METRIC_TIPS['12v12'], r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
@@ -338,11 +379,10 @@ const StoresList = ({ stores, onSelect }) => {
     { k: 'metric_2v2', l: '2 חודשים\nספט→נוב', t: METRIC_TIPS['2v2'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev2} to={r.qty_last2} /> },
     { k: 'metric_peak_distance', l: 'מרחק מהשיא', t: METRIC_TIPS['peak'], r: (v, r) => <PeakCell pct={v} peak={r.peak_value} current={r.current_value} /> },
     { k: 'returns_pct_last6', l: 'חזרות %', t: METRIC_TIPS['returns'], r: (v, r) => <ReturnsCell pctL6={v} pctP6={r.returns_pct_prev6} change={r.returns_change} /> },
-    { k: 'status', l: 'סטטוס', r: (v, r) => <StatusBadge status={v} recovery={r.is_recovering} shortTerm={r.metric_short_term} /> },
     { k: 'qty_total', l: 'כמות', r: v => <span className="font-bold">{fmt(v)}</span> },
   ];
   
-  return (<div className="space-y-4">
+  return (<div className="space-y-4 w-full">
     <div className="flex items-center justify-between flex-wrap gap-2">
       <h2 className="text-xl font-bold">חנויות ({filtered.length})</h2>
       <div className="flex gap-2 print:hidden">
@@ -358,8 +398,8 @@ const StoresList = ({ stores, onSelect }) => {
         <MultiSelect label="סוכן" opts={FILTERS.agents || []} selected={agents} onChange={setAgents} />
       </div>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        <MultiSelect label="סטטוס טווח ארוך" opts={['צמיחה','יציב','התאוששות','ירידה מתונה','התרסקות']} selected={statusesLong} onChange={setStatusesLong} />
-        <MultiSelect label="סטטוס טווח קצר" opts={['צמיחה','יציב','ירידה מתונה','התרסקות']} selected={statusesShort} onChange={setStatusesShort} />
+        <MultiSelect label="סטטוס טווח ארוך" opts={['צמיחה','יציב','ירידה','קריטי']} selected={statusesLong} onChange={setStatusesLong} />
+        <MultiSelect label="סטטוס טווח קצר" opts={['עלייה חדה','יציב','ירידה','אזעקה']} selected={statusesShort} onChange={setStatusesShort} />
         <div><label className="text-xs text-gray-600 block mb-1">מינימום פריטים</label><input type="number" value={minQty || ''} onChange={e => setMinQty(Number(e.target.value) || 0)} placeholder="0" className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" /></div>
       </div>
     </div>}
@@ -608,14 +648,15 @@ const ProductsList = ({ products, onSelect }) => {
   
   const filtered = useMemo(() => products.filter(p => { 
     if (cats.length && !cats.includes(p.category)) return false; 
-    if (statusesLong.length && !statusesLong.includes(p.status)) return false;
-    if (statusesShort.length && !statusesShort.includes(getShortTermStatus(p.metric_short_term))) return false;
+    if (statusesLong.length && !statusesLong.includes(p.status_long)) return false;
+    if (statusesShort.length && !statusesShort.includes(p.status_short)) return false;
     if (minQty > 0 && (p.qty_2025 || 0) < minQty) return false;
     return true; 
   }), [products, cats, statusesLong, statusesShort, minQty]);
   
   const cols = [
     { k: 'name', l: 'מוצר', r: (v, r) => <div><p className="font-medium">{v}</p><p className="text-xs text-gray-500">{r.category}</p></div> },
+    { k: 'status_long', l: 'סטטוס', r: (v, r) => <StatusBadge item={r} /> },
     { k: 'metric_long_term', l: 'טווח ארוך', t: METRIC_TIPS['long_term'], r: (v) => <LongTermCell value={v} /> },
     { k: 'metric_short_term', l: 'טווח קצר', t: METRIC_TIPS['short_term'], r: (v, r) => <ShortTermCell value={v} ok={r.short_term_ok} /> },
     { k: 'metric_12v12', l: 'שנתי\n24→25', t: METRIC_TIPS['12v12'], r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
@@ -624,24 +665,23 @@ const ProductsList = ({ products, onSelect }) => {
     { k: 'metric_2v2', l: '2 חודשים', t: METRIC_TIPS['2v2'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev2} to={r.qty_last2} /> },
     { k: 'metric_peak_distance', l: 'מרחק מהשיא', t: METRIC_TIPS['peak'], r: (v, r) => <PeakCell pct={v} peak={r.peak_value} current={r.current_value} /> },
     { k: 'returns_pct_last6', l: 'חזרות %', t: METRIC_TIPS['returns'], r: (v, r) => <ReturnsCell pctL6={v} pctP6={r.returns_pct_prev6} change={r.returns_change} /> },
-    { k: 'status', l: 'סטטוס', r: (v, r) => <StatusBadge status={v} recovery={r.is_recovering} shortTerm={r.metric_short_term} /> },
     { k: 'total_sales', l: 'מחזור', r: v => <span className="font-bold text-gray-600">₪{fmt(v)}</span> },
     { k: 'qty_total', l: 'כמות', r: v => <span className="font-bold">{fmt(v)}</span> },
   ];
   
-  return (<div className="space-y-4">
+  return (<div className="space-y-4 w-full">
     <div className="flex items-center justify-between">
       <h2 className="text-xl font-bold">מוצרים ({filtered.length})</h2>
       <button onClick={() => exportPDF('מוצרים - Baron')} className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl text-sm print:hidden"><FileText size={16}/>PDF</button>
     </div>
     <div className="flex flex-wrap gap-3 items-center print:hidden">
       <MultiSelect opts={FILTERS.categories || []} selected={cats} onChange={setCats} placeholder="קטגוריה" />
-      <MultiSelect opts={['צמיחה','יציב','התאוששות','ירידה מתונה','התרסקות']} selected={statusesLong} onChange={setStatusesLong} placeholder="סטטוס ארוך" />
-      <MultiSelect opts={['צמיחה','יציב','ירידה מתונה','התרסקות']} selected={statusesShort} onChange={setStatusesShort} placeholder="סטטוס קצר" />
+      <MultiSelect opts={['צמיחה','יציב','ירידה','קריטי']} selected={statusesLong} onChange={setStatusesLong} placeholder="סטטוס ארוך" />
+      <MultiSelect opts={['עלייה חדה','יציב','ירידה','אזעקה']} selected={statusesShort} onChange={setStatusesShort} placeholder="סטטוס קצר" />
       <input type="number" value={minQty || ''} onChange={e => setMinQty(Number(e.target.value) || 0)} placeholder="מינ׳ 2025" className="w-32 px-3 py-2 border border-gray-200 rounded-xl text-sm" />
     </div>
     <Table data={filtered} cols={cols} onRow={onSelect} name="products" />
-  </div>);
+  </div>)
 };
 
 const ProductDetail = ({ product, onBack }) => {
@@ -722,9 +762,52 @@ const Alerts = ({ stores, onSelect }) => {
 };
 
 const Rankings = ({ stores, onSelect }) => {
-  const r = useMemo(() => ({ qty: [...stores].sort((a,b) => (b.qty_total||0)-(a.qty_total||0)).slice(0,30), growth: [...stores].filter(s=>!s.is_inactive).sort((a,b) => (b.metric_12v12||0)-(a.metric_12v12||0)).slice(0,30), recovery: [...stores].filter(s=>s.status==='התאוששות').slice(0,30) }), [stores]);
-  const List = ({ title, data, icon, bg, showGrowth }) => (<div className="bg-white rounded-2xl shadow-lg p-5 border"><h3 className="text-lg font-bold mb-4">{icon} {title}</h3><div className="space-y-2 max-h-96 overflow-y-auto">{data.map((s,i) => <div key={s.id} onClick={() => onSelect(s)} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl hover:bg-blue-50 cursor-pointer"><div className="flex items-center gap-2"><span className={'w-6 h-6 flex items-center justify-center text-white rounded-full text-xs font-bold ' + bg}>{i+1}</span><span className="text-sm font-medium">{s.name}</span></div><span className={'text-sm font-bold ' + (showGrowth ? (s.metric_12v12 >= 0 ? 'text-emerald-600' : 'text-red-600') : '')}>{showGrowth ? fmtPct(s.metric_12v12) : fmt(s.qty_total)}</span></div>)}</div></div>);
-  return (<div className="space-y-4"><div className="flex justify-between items-center"><h2 className="text-xl font-bold">דירוגים</h2><button onClick={() => exportPDF('דירוגים - Baron')} className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl text-sm print:hidden"><FileText size={16}/>PDF</button></div><div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><List title="לפי כמות כוללת" data={r.qty} icon="🏆" bg="bg-blue-500" /><List title="לפי צמיחה" data={r.growth} icon="📈" bg="bg-emerald-500" showGrowth /><List title="התאוששות" data={r.recovery} icon="💪" bg="bg-amber-500" showGrowth /></div></div>);
+  // Recovery = stores with negative long-term but positive short-term (2 months)
+  const r = useMemo(() => ({
+    qty: [...stores].sort((a,b) => (b.qty_total||0)-(a.qty_total||0)).slice(0,30),
+    growth: [...stores].filter(s=>!s.is_inactive).sort((a,b) => (b.metric_12v12||0)-(a.metric_12v12||0)).slice(0,30),
+    recovery: [...stores].filter(s => s.is_recovering || (s.status_long === 'ירידה' || s.status_long === 'קריטי') && s.status_short === 'עלייה חדה').slice(0,30)
+  }), [stores]);
+  const List = ({ title, data, icon, bg, showGrowth, showRecovery }) => (
+    <div className="bg-white rounded-2xl shadow-lg p-5 border">
+      <h3 className="text-lg font-bold mb-4">{icon} {title} {data.length > 0 && <span className="text-sm font-normal text-gray-500">({data.length})</span>}</h3>
+      {data.length === 0 ? (
+        <p className="text-gray-400 text-center py-8">אין נתונים</p>
+      ) : (
+        <div className="space-y-2 max-h-96 overflow-y-auto">
+          {data.map((s,i) => (
+            <div key={s.id} onClick={() => onSelect(s)} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl hover:bg-blue-50 cursor-pointer">
+              <div className="flex items-center gap-2">
+                <span className={'w-6 h-6 flex items-center justify-center text-white rounded-full text-xs font-bold ' + bg}>{i+1}</span>
+                <span className="text-sm font-medium">{s.name}</span>
+              </div>
+              {showRecovery ? (
+                <div className="text-left">
+                  <p className="text-xs text-gray-500">ארוך: <span className="text-red-600 font-bold">{fmtPct(s.metric_long_term || s.metric_12v12)}</span></p>
+                  <p className="text-xs text-gray-500">קצר: <span className="text-emerald-600 font-bold">{fmtPct(s.metric_2v2 || s.metric_short_term)}</span></p>
+                </div>
+              ) : (
+                <span className={'text-sm font-bold ' + (showGrowth ? (s.metric_12v12 >= 0 ? 'text-emerald-600' : 'text-red-600') : '')}>{showGrowth ? fmtPct(s.metric_12v12) : fmt(s.qty_total)}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-bold">דירוגים</h2>
+        <button onClick={() => exportPDF('דירוגים - Baron')} className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl text-sm print:hidden"><FileText size={16}/>PDF</button>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <List title="לפי כמות כוללת" data={r.qty} icon="🏆" bg="bg-blue-500" />
+        <List title="לפי צמיחה" data={r.growth} icon="📈" bg="bg-emerald-500" showGrowth />
+        <List title="התאוששות" data={r.recovery} icon="💪" bg="bg-amber-500" showRecovery />
+      </div>
+    </div>
+  );
 };
 
 const Inactive = ({ stores, onSelect }) => {
@@ -748,7 +831,17 @@ const Trends = ({ stores, products }) => {
   </div>);
 };
 
-const DEFAULT_CONFIG = { recovery_threshold: 10, growth_12v12: 10, growth_short: 0, stable_min: -10, stable_max: 10, decline_12v12: -10, decline_months: 3, crash_12v12: -30, crash_peak: -50, crash_months: 6 };
+const DEFAULT_CONFIG = { 
+  // Long term thresholds
+  long_growth: 10,      // >= this = צמיחה
+  long_stable_min: -10, // >= this = יציב
+  long_stable_max: 10,  // <= this = יציב
+  long_decline: -30,    // >= this = ירידה, below = קריטי
+  // Short term thresholds (2 months)
+  short_surge: 15,      // >= this = עלייה חדה
+  short_stable_min: -10, // >= this = יציב
+  short_decline: -25,   // >= this = ירידה, below = אזעקה
+};
 const getConfig = () => { if (typeof window === 'undefined') return DEFAULT_CONFIG; try { const saved = localStorage.getItem('baron_config'); return saved ? { ...DEFAULT_CONFIG, ...JSON.parse(saved) } : DEFAULT_CONFIG; } catch { return DEFAULT_CONFIG; } };
 const saveConfig = (config) => { if (typeof window !== 'undefined') localStorage.setItem('baron_config', JSON.stringify(config)); };
 
@@ -799,17 +892,68 @@ const SettingsPage = ({ onLogout }) => {
       <button onClick={handlePasswordChange} className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">שנה סיסמא</button>
     </div>
     
-    {/* Status Config */}
+    {/* Status Config - NEW CLEAR VERSION */}
     <div className="bg-white rounded-2xl shadow-lg p-6 border">
-      <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Settings size={20}/>הגדרות סטטוסים</h3>
-      <p className="text-sm text-gray-500 mb-6">הגדר את הסיפים לחישוב סטטוס</p>
-      <div className="space-y-4">
-        <div className="p-4 bg-emerald-50 rounded-xl"><h4 className="font-bold text-emerald-700 mb-3">🚀 צמיחה</h4><p className="text-xs text-gray-600 mb-3">טווח ארוך ≥ X% AND טווח קצר ≥ Y%</p><div className="grid grid-cols-2 gap-3"><div><label className="text-xs text-gray-600">טווח ארוך מינימום %</label><input type="number" value={config.growth_12v12} onChange={e => setConfig({...config, growth_12v12: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div><div><label className="text-xs text-gray-600">טווח קצר מינימום %</label><input type="number" value={config.growth_short} onChange={e => setConfig({...config, growth_short: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div></div></div>
-        <div className="p-4 bg-amber-50 rounded-xl"><h4 className="font-bold text-amber-700 mb-3">📈 התאוששות</h4><p className="text-xs text-gray-600 mb-3">טווח ארוך שלילי אבל טווח קצר ≥ X%</p><div><label className="text-xs text-gray-600">טווח קצר מינימום %</label><input type="number" value={config.recovery_threshold} onChange={e => setConfig({...config, recovery_threshold: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div></div>
-        <div className="p-4 bg-blue-50 rounded-xl"><h4 className="font-bold text-blue-700 mb-3">⚖️ יציב</h4><p className="text-xs text-gray-600 mb-3">X% ≤ טווח ארוך ≤ Y%</p><div className="grid grid-cols-2 gap-3"><div><label className="text-xs text-gray-600">מינימום %</label><input type="number" value={config.stable_min} onChange={e => setConfig({...config, stable_min: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div><div><label className="text-xs text-gray-600">מקסימום %</label><input type="number" value={config.stable_max} onChange={e => setConfig({...config, stable_max: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div></div></div>
-        <div className="p-4 bg-orange-50 rounded-xl"><h4 className="font-bold text-orange-700 mb-3">📉 ירידה מתונה</h4><p className="text-xs text-gray-600 mb-3">טווח ארוך &lt; X% OR ירידה ≥ Y חודשים</p><div className="grid grid-cols-2 gap-3"><div><label className="text-xs text-gray-600">טווח ארוך מקסימום %</label><input type="number" value={config.decline_12v12} onChange={e => setConfig({...config, decline_12v12: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div><div><label className="text-xs text-gray-600">חודשי ירידה</label><input type="number" value={config.decline_months} onChange={e => setConfig({...config, decline_months: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div></div></div>
-        <div className="p-4 bg-red-50 rounded-xl"><h4 className="font-bold text-red-700 mb-3">💥 התרסקות</h4><p className="text-xs text-gray-600 mb-3">טווח ארוך &lt; X% OR מרחק מהשיא &lt; Y% OR ירידה ≥ Z חודשים</p><div className="grid grid-cols-3 gap-3"><div><label className="text-xs text-gray-600">טווח ארוך %</label><input type="number" value={config.crash_12v12} onChange={e => setConfig({...config, crash_12v12: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div><div><label className="text-xs text-gray-600">מרחק מהשיא %</label><input type="number" value={config.crash_peak} onChange={e => setConfig({...config, crash_peak: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div><div><label className="text-xs text-gray-600">חודשי ירידה</label><input type="number" value={config.crash_months} onChange={e => setConfig({...config, crash_months: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div></div></div>
+      <h3 className="text-lg font-bold mb-2 flex items-center gap-2"><Settings size={20}/>הגדרות סטטוסים</h3>
+      <p className="text-sm text-gray-500 mb-6">הגדר את הספים לחישוב סטטוס טווח ארוך וטווח קצר</p>
+      
+      {/* LONG TERM */}
+      <div className="mb-6">
+        <h4 className="font-bold text-gray-700 mb-3 pb-2 border-b">📊 טווח ארוך (מבוסס על שנתי 24→25)</h4>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+            <div className="flex items-center gap-1 mb-2"><span className="text-emerald-700 font-bold">🟢 צמיחה</span></div>
+            <p className="text-xs text-gray-600 mb-2">≥ X%</p>
+            <input type="number" value={config.long_growth} onChange={e => setConfig({...config, long_growth: Number(e.target.value)})} className="w-full px-2 py-1 border rounded text-sm"/>
+          </div>
+          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="flex items-center gap-1 mb-2"><span className="text-blue-700 font-bold">🔵 יציב</span></div>
+            <p className="text-xs text-gray-600 mb-2">בין X% ל-Y%</p>
+            <div className="flex gap-1">
+              <input type="number" value={config.long_stable_min} onChange={e => setConfig({...config, long_stable_min: Number(e.target.value)})} className="w-full px-2 py-1 border rounded text-sm" placeholder="מ-"/>
+              <input type="number" value={config.long_stable_max} onChange={e => setConfig({...config, long_stable_max: Number(e.target.value)})} className="w-full px-2 py-1 border rounded text-sm" placeholder="עד"/>
+            </div>
+          </div>
+          <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
+            <div className="flex items-center gap-1 mb-2"><span className="text-orange-700 font-bold">🟠 ירידה</span></div>
+            <p className="text-xs text-gray-600 mb-2">בין X% לסף יציב</p>
+            <input type="number" value={config.long_decline} onChange={e => setConfig({...config, long_decline: Number(e.target.value)})} className="w-full px-2 py-1 border rounded text-sm" placeholder="סף תחתון"/>
+          </div>
+          <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+            <div className="flex items-center gap-1 mb-2"><span className="text-red-700 font-bold">🔴 קריטי</span></div>
+            <p className="text-xs text-gray-600 mb-2">&lt; סף ירידה</p>
+            <p className="text-xs text-gray-500">(אוטומטי)</p>
+          </div>
+        </div>
       </div>
+      
+      {/* SHORT TERM */}
+      <div>
+        <h4 className="font-bold text-gray-700 mb-3 pb-2 border-b">⚡ טווח קצר - אזעקות (מבוסס על 2 חודשים אחרונים)</h4>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+            <div className="flex items-center gap-1 mb-2"><span className="text-emerald-700 font-bold">🚀 עלייה חדה</span></div>
+            <p className="text-xs text-gray-600 mb-2">≥ X%</p>
+            <input type="number" value={config.short_surge} onChange={e => setConfig({...config, short_surge: Number(e.target.value)})} className="w-full px-2 py-1 border rounded text-sm"/>
+          </div>
+          <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="flex items-center gap-1 mb-2"><span className="text-gray-700 font-bold">✅ יציב</span></div>
+            <p className="text-xs text-gray-600 mb-2">≥ X%</p>
+            <input type="number" value={config.short_stable_min} onChange={e => setConfig({...config, short_stable_min: Number(e.target.value)})} className="w-full px-2 py-1 border rounded text-sm"/>
+          </div>
+          <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
+            <div className="flex items-center gap-1 mb-2"><span className="text-orange-700 font-bold">⚠️ ירידה</span></div>
+            <p className="text-xs text-gray-600 mb-2">≥ X%</p>
+            <input type="number" value={config.short_decline} onChange={e => setConfig({...config, short_decline: Number(e.target.value)})} className="w-full px-2 py-1 border rounded text-sm"/>
+          </div>
+          <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+            <div className="flex items-center gap-1 mb-2"><span className="text-red-700 font-bold">🚨 אזעקה</span></div>
+            <p className="text-xs text-gray-600 mb-2">&lt; סף ירידה</p>
+            <p className="text-xs text-gray-500">(אוטומטי)</p>
+          </div>
+        </div>
+      </div>
+      
       <div className="flex gap-3 mt-6">
         <button onClick={handleSave} className={'px-6 py-2 rounded-xl font-medium transition-all ' + (saved ? 'bg-emerald-500 text-white' : 'bg-blue-500 text-white hover:bg-blue-600')}>{saved ? <span className="flex items-center gap-2"><Check size={16}/>נשמר!</span> : 'שמור הגדרות'}</button>
         <button onClick={handleReset} className="px-6 py-2 rounded-xl font-medium bg-gray-200 hover:bg-gray-300">איפוס</button>
@@ -823,7 +967,7 @@ const SettingsPage = ({ onLogout }) => {
         <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-blue-600">{STORES_RAW.length}</p><p className="text-xs text-gray-500">חנויות</p></div>
         <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-purple-600">{PRODUCTS_RAW.length}</p><p className="text-xs text-gray-500">מוצרים</p></div>
         <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-emerald-600">{STORES_RAW.filter(s => !s.is_inactive).length}</p><p className="text-xs text-gray-500">חנויות פעילות</p></div>
-        <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-gray-600">v7.3</p><p className="text-xs text-gray-500">גרסה</p></div>
+        <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-gray-600">v7.4</p><p className="text-xs text-gray-500">גרסה</p></div>
       </div>
       <p className="text-xs text-gray-400 text-center mt-4">עדכון אחרון: ינואר 2026</p>
     </div>
