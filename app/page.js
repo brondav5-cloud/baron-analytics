@@ -301,14 +301,30 @@ const Overview = ({ stores, products, onNav }) => {
     const yoy_sales = s24 > 0 ? ((s25 - s24) / s24) * 100 : 0;
     const hoh_qty = qp6 > 0 ? ((ql6 - qp6) / qp6) * 100 : 0;
     const hoh_sales = sp6 > 0 ? ((sl6 - sp6) / sp6) * 100 : 0;
-    const sc = {}; stores.forEach(s => { sc[s.status] = (sc[s.status] || 0) + 1; });
+    // Long term status counts
+    const scLong = {}; stores.forEach(s => { const st = s.status_long || 'יציב'; scLong[st] = (scLong[st] || 0) + 1; });
+    // Short term status counts
+    const scShort = {}; stores.forEach(s => { const st = s.status_short || 'יציב'; scShort[st] = (scShort[st] || 0) + 1; });
     const top = [...stores].sort((a, b) => (b.qty_total || 0) - (a.qty_total || 0)).slice(0, 20);
     const bot = [...active].sort((a, b) => (a.metric_12v12 || 0) - (b.metric_12v12 || 0)).slice(0, 20);
-    const alerts = stores.filter(s => !s.is_inactive && (s.status === 'התרסקות' || s.declining_months >= 3)).length;
-    return { active: active.length, total: stores.length, q24, q25, ql6, qp6, s24, s25, sl6, sp6, yoy_qty, yoy_sales, hoh_qty, hoh_sales, sc, top, bot, alerts };
+    const alerts = stores.filter(s => !s.is_inactive && (s.status_short === 'אזעקה' || s.status_long === 'קריטי')).length;
+    return { active: active.length, total: stores.length, q24, q25, ql6, qp6, s24, s25, sl6, sp6, yoy_qty, yoy_sales, hoh_qty, hoh_sales, scLong, scShort, top, bot, alerts };
   }, [stores]);
-  const pie = Object.entries(st.sc).map(([n, v], i) => ({ name: n, value: v, color: COLORS[i % COLORS.length] }));
+  
+  // Colors for long term
+  const LONG_COLORS = { 'צמיחה': '#10b981', 'יציב': '#3b82f6', 'ירידה': '#f97316', 'קריטי': '#ef4444' };
+  const pieLong = Object.entries(st.scLong).map(([n, v]) => ({ name: n, value: v, color: LONG_COLORS[n] || '#6b7280' }));
+  
+  // Colors for short term
+  const SHORT_COLORS = { 'עלייה חדה': '#10b981', 'יציב': '#6b7280', 'ירידה': '#f97316', 'אזעקה': '#ef4444' };
+  const pieShort = Object.entries(st.scShort).map(([n, v]) => ({ name: n, value: v, color: SHORT_COLORS[n] || '#6b7280' }));
+  
   const trend = useMemo(() => { const m = {}; stores.forEach(s => { if (s.monthly_qty) Object.entries(s.monthly_qty).forEach(([k, v]) => { m[k] = (m[k] || 0) + v; }); }); return Object.entries(m).sort(([a], [b]) => Number(a) - Number(b)).map(([k, v]) => ({ month: fmtMonth(k), value: v })); }, [stores]);
+  
+  // Custom label for pie
+  const renderLabel = ({ name, percent, cx, x, y }) => {
+    return <text x={x} y={y} fill="#374151" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={12} fontWeight="bold">{name} {(percent*100).toFixed(0)}%</text>;
+  };
   
   return (<div className="space-y-6">
     <div className="flex justify-between items-center"><h2 className="text-xl font-bold">סקירה כללית</h2><button onClick={() => exportPDF('סקירה כללית - Baron')} className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl text-sm print:hidden"><FileText size={16}/>PDF</button></div>
@@ -340,10 +356,43 @@ const Overview = ({ stores, products, onNav }) => {
         <div className={'text-center p-4 rounded-xl ' + (st.hoh_sales >= 0 ? 'bg-emerald-50' : 'bg-red-50')}><p className="text-sm text-gray-600">שינוי</p><p className={'text-xl font-bold ' + (st.hoh_sales >= 0 ? 'text-emerald-600' : 'text-red-600')}>{fmtPct(st.hoh_sales)}</p></div>
       </div>
     </div>
+    
+    {/* Two status pie charts */}
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div className="bg-white rounded-2xl shadow-lg p-6 border"><h3 className="text-lg font-bold mb-4">התפלגות סטטוסים</h3><ResponsiveContainer width="100%" height={250}><PieChart><Pie data={pie} cx="50%" cy="50%" innerRadius={50} outerRadius={85} dataKey="value" label={({ name, percent }) => name + ' ' + (percent*100).toFixed(0) + '%'}>{pie.map((e, i) => <Cell key={i} fill={e.color} />)}</Pie><Tooltip formatter={v => fmt(v)} /></PieChart></ResponsiveContainer></div>
-      <div className="bg-white rounded-2xl shadow-lg p-6 border"><h3 className="text-lg font-bold mb-4">מגמת כמויות</h3><ResponsiveContainer width="100%" height={250}><AreaChart data={trend}><defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" tick={{fontSize:10}} /><YAxis tickFormatter={v => (v/1000).toFixed(0) + 'K'} tick={{fontSize:10}} /><Tooltip formatter={v => fmt(v)} /><Area type="monotone" dataKey="value" stroke="#3b82f6" fill="url(#cg)" /></AreaChart></ResponsiveContainer></div>
+      <div className="bg-white rounded-2xl shadow-lg p-6 border">
+        <h3 className="text-lg font-bold mb-2">📊 סטטוס טווח ארוך</h3>
+        <p className="text-xs text-gray-500 mb-4">מבוסס על השוואה שנתית (24→25)</p>
+        <ResponsiveContainer width="100%" height={220}>
+          <PieChart>
+            <Pie data={pieLong} cx="50%" cy="50%" innerRadius={45} outerRadius={75} dataKey="value" label={renderLabel} labelLine={true}>
+              {pieLong.map((e, i) => <Cell key={i} fill={e.color} />)}
+            </Pie>
+            <Tooltip formatter={v => fmt(v) + ' חנויות'} />
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="flex flex-wrap justify-center gap-3 mt-2">
+          {pieLong.map(p => <div key={p.name} className="flex items-center gap-1"><div className="w-3 h-3 rounded-full" style={{backgroundColor: p.color}}></div><span className="text-xs">{p.name}: {p.value}</span></div>)}
+        </div>
+      </div>
+      <div className="bg-white rounded-2xl shadow-lg p-6 border">
+        <h3 className="text-lg font-bold mb-2">⚡ סטטוס טווח קצר (אזעקות)</h3>
+        <p className="text-xs text-gray-500 mb-4">מבוסס על 2 חודשים אחרונים</p>
+        <ResponsiveContainer width="100%" height={220}>
+          <PieChart>
+            <Pie data={pieShort} cx="50%" cy="50%" innerRadius={45} outerRadius={75} dataKey="value" label={renderLabel} labelLine={true}>
+              {pieShort.map((e, i) => <Cell key={i} fill={e.color} />)}
+            </Pie>
+            <Tooltip formatter={v => fmt(v) + ' חנויות'} />
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="flex flex-wrap justify-center gap-3 mt-2">
+          {pieShort.map(p => <div key={p.name} className="flex items-center gap-1"><div className="w-3 h-3 rounded-full" style={{backgroundColor: p.color}}></div><span className="text-xs">{p.name}: {p.value}</span></div>)}
+        </div>
+      </div>
     </div>
+    
+    <div className="bg-white rounded-2xl shadow-lg p-6 border"><h3 className="text-lg font-bold mb-4">מגמת כמויות</h3><ResponsiveContainer width="100%" height={250}><AreaChart data={trend}><defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" tick={{fontSize:10}} /><YAxis tickFormatter={v => (v/1000).toFixed(0) + 'K'} tick={{fontSize:10}} /><Tooltip formatter={v => fmt(v)} /><Area type="monotone" dataKey="value" stroke="#3b82f6" fill="url(#cg)" /></AreaChart></ResponsiveContainer></div>
+    
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div className="bg-white rounded-2xl shadow-lg p-6 border"><h3 className="text-lg font-bold mb-4">🏆 20 מובילות</h3><div className="space-y-2 max-h-80 overflow-y-auto">{st.top.map((s, i) => <div key={s.id} onClick={() => onNav('store', s)} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-blue-50 cursor-pointer"><div className="flex items-center gap-3"><span className="w-7 h-7 flex items-center justify-center bg-blue-500 text-white rounded-full text-xs font-bold">{i+1}</span><div><p className="font-medium text-sm">{s.name}</p><p className="text-xs text-gray-500">{s.city}</p></div></div><div className="text-left"><p className="font-bold text-sm">{fmt(s.qty_total)}</p></div></div>)}</div></div>
       <div className="bg-white rounded-2xl shadow-lg p-6 border"><h3 className="text-lg font-bold mb-4">📉 20 בירידה</h3><div className="space-y-2 max-h-80 overflow-y-auto">{st.bot.map((s, i) => <div key={s.id} onClick={() => onNav('store', s)} className="flex items-center justify-between p-3 bg-red-50 rounded-xl hover:bg-red-100 cursor-pointer"><div className="flex items-center gap-3"><span className="w-7 h-7 flex items-center justify-center bg-red-500 text-white rounded-full text-xs font-bold">{i+1}</span><div><p className="font-medium text-sm">{s.name}</p><p className="text-xs text-gray-500">{s.city}</p></div></div><div className="text-left"><p className="font-bold text-red-600 text-sm">{fmtPct(s.metric_12v12)}</p><p className="text-xs text-gray-500">{fmt(s.qty_2024)}→{fmt(s.qty_2025)}</p></div></div>)}</div></div>
@@ -556,11 +605,14 @@ const CityIndicator = ({ store, allStores }) => {
   );
 };
 
-const StoreDetail = ({ store, onBack, allStores }) => {
+const StoreDetail = ({ store, onBack, allStores, excludedProducts = [] }) => {
   const chart = useMemo(() => { if (!store.monthly_qty) return []; return Object.entries(store.monthly_qty).sort(([a],[b]) => Number(a)-Number(b)).map(([m,v]) => ({ month: fmtMonth(m), qty: v })); }, [store]);
-  const prods = STORE_PRODUCTS[String(store.id)] || [];
   
-  // Pie chart data
+  // Filter out excluded products
+  const allProds = STORE_PRODUCTS[String(store.id)] || [];
+  const prods = useMemo(() => allProds.filter(p => !excludedProducts.includes(p.id)), [allProds, excludedProducts]);
+  
+  // Pie chart data - filtered
   const pieData = useMemo(() => {
     if (!prods.length) return [];
     const sorted = [...prods].sort((a, b) => (b.qty_total || 0) - (a.qty_total || 0));
@@ -568,13 +620,14 @@ const StoreDetail = ({ store, onBack, allStores }) => {
     const totalQty = prods.reduce((s, p) => s + (p.qty_total || 0), 0);
     return top10.map((p, i) => ({
       name: p.name.length > 15 ? p.name.slice(0, 15) + '...' : p.name,
+      fullName: p.name,
       value: p.qty_total || 0,
       pct: totalQty > 0 ? ((p.qty_total || 0) / totalQty * 100).toFixed(1) : 0,
       color: COLORS[i % COLORS.length]
     }));
   }, [prods]);
   
-  // Line chart - top 5 products trend
+  // Line chart - top 5 products trend (filtered)
   const top5Products = useMemo(() => [...prods].sort((a, b) => (b.qty_total || 0) - (a.qty_total || 0)).slice(0, 5), [prods]);
   const productTrendData = useMemo(() => {
     if (!top5Products.length) return [];
@@ -587,6 +640,16 @@ const StoreDetail = ({ store, onBack, allStores }) => {
     });
   }, [top5Products]);
   
+  // Custom label renderer for line chart - adds name at end of line
+  const renderLineLabel = (props) => {
+    const { x, y, index, dataKey } = props;
+    if (index !== productTrendData.length - 1) return null;
+    const idx = parseInt(dataKey.replace('p', ''));
+    const name = top5Products[idx]?.name || '';
+    const shortName = name.length > 12 ? name.slice(0, 12) + '...' : name;
+    return <text x={x + 5} y={y} fill={COLORS[idx]} fontSize={10} dominantBaseline="middle">{shortName}</text>;
+  };
+  
   const prodCols = [
     { k: 'name', l: 'מוצר', r: (v, r) => <div><p className="font-medium">{v}</p><p className="text-xs text-gray-500">{r.category}</p></div> },
     { k: 'metric_long_term', l: 'טווח ארוך', t: METRIC_TIPS['long_term'], r: (v) => <LongTermCell value={v} /> },
@@ -597,7 +660,7 @@ const StoreDetail = ({ store, onBack, allStores }) => {
     { k: 'metric_2v2', l: '2 חודשים', t: METRIC_TIPS['2v2'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev2} to={r.qty_last2} /> },
     { k: 'metric_peak_distance', l: 'מרחק מהשיא', t: METRIC_TIPS['peak'], r: (v, r) => <PeakCell pct={v} peak={r.peak_value} current={r.current_value} /> },
     { k: 'returns_pct_last6', l: 'חזרות %', t: METRIC_TIPS['returns'], r: (v, r) => <ReturnsCell pctL6={v} pctP6={r.returns_pct_prev6} change={r.returns_change} /> },
-    { k: 'status', l: 'סטטוס', r: (v, r) => <StatusBadge status={v} recovery={r.is_recovering} shortTerm={r.metric_short_term} sm /> },
+    { k: 'status', l: 'סטטוס', r: (v, r) => <StatusBadge item={r} sm /> },
     { k: 'qty_total', l: 'כמות', r: v => <span className="font-bold">{fmt(v)}</span> },
   ];
   
@@ -609,7 +672,7 @@ const StoreDetail = ({ store, onBack, allStores }) => {
     <div className="bg-white rounded-2xl shadow-lg p-6 border">
       <div className="flex justify-between items-start flex-wrap gap-4">
         <div><h1 className="text-2xl font-bold">{store.name}</h1><p className="text-gray-500 mt-1">{store.city} {store.network && '• ' + store.network}</p><p className="text-sm text-gray-400 mt-1">נהג: {store.driver || '-'} | סוכן: {store.agent || '-'}</p></div>
-        <Badge status={store.status} />
+        <StatusBadge item={store} />
       </div>
     </div>
     <CityIndicator store={store} allStores={allStores} />
@@ -629,17 +692,40 @@ const StoreDetail = ({ store, onBack, allStores }) => {
     </div>
     <div className="bg-white rounded-2xl shadow-lg p-6 border"><h3 className="text-lg font-bold mb-4">מגמת כמויות</h3><ResponsiveContainer width="100%" height={250}><AreaChart data={chart}><defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" tick={{fontSize:10}} /><YAxis tickFormatter={v => fmt(v)} tick={{fontSize:10}} /><Tooltip formatter={v => fmt(v)} /><Area type="monotone" dataKey="qty" stroke="#3b82f6" fill="url(#sg)" name="כמות" /></AreaChart></ResponsiveContainer></div>
     {pieData.length > 0 && <div className="bg-white rounded-2xl shadow-lg p-6 border">
-      <h3 className="text-lg font-bold mb-4">🥧 חלוקת מוצרים (TOP 10)</h3>
+      <h3 className="text-lg font-bold mb-4">🥧 חלוקת מוצרים (TOP 10) {excludedProducts.length > 0 && <span className="text-sm font-normal text-orange-600">({excludedProducts.length} מוצרים מוחרגים)</span>}</h3>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ResponsiveContainer width="100%" height={300}><PieChart><Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} dataKey="value" label={({ pct }) => `${pct}%`}>{pieData.map((e, i) => <Cell key={i} fill={e.color} />)}</Pie><Tooltip formatter={(v, n, props) => [fmt(v), props.payload.name]} /></PieChart></ResponsiveContainer>
+        <ResponsiveContainer width="100%" height={300}><PieChart><Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} dataKey="value" label={({ pct }) => `${pct}%`}>{pieData.map((e, i) => <Cell key={i} fill={e.color} />)}</Pie><Tooltip formatter={(v, n, props) => [fmt(v), props.payload.fullName]} /></PieChart></ResponsiveContainer>
         <div className="space-y-2">{pieData.map((p, i) => <div key={i} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg"><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: p.color }}></div><span className="text-sm">{p.name}</span></div><div className="text-left"><span className="font-bold text-sm">{fmt(p.value)}</span><span className="text-xs text-gray-500 mr-1">({p.pct}%)</span></div></div>)}</div>
       </div>
     </div>}
     {productTrendData.length > 0 && top5Products.length > 0 && <div className="bg-white rounded-2xl shadow-lg p-6 border">
-      <h3 className="text-lg font-bold mb-4">📈 מגמת 5 מוצרים מובילים</h3>
-      <ResponsiveContainer width="100%" height={300}><LineChart data={productTrendData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" tick={{fontSize:10}} /><YAxis tickFormatter={v => fmt(v)} tick={{fontSize:10}} /><Tooltip formatter={(v, name) => { const idx = parseInt(name.replace('p', '')); return [fmt(v), top5Products[idx]?.name || '']; }} /><Legend formatter={(value) => { const idx = parseInt(value.replace('p', '')); const name = top5Products[idx]?.name || ''; return name.length > 20 ? name.slice(0, 20) + '...' : name; }} />{top5Products.map((_, i) => <Line key={i} type="monotone" dataKey={`p${i}`} stroke={COLORS[i]} strokeWidth={2} dot={{ r: 2 }} name={`p${i}`} />)}</LineChart></ResponsiveContainer>
+      <h3 className="text-lg font-bold mb-4">📈 מגמת 5 מוצרים מובילים {excludedProducts.length > 0 && <span className="text-sm font-normal text-orange-600">(ללא מוחרגים)</span>}</h3>
+      <ResponsiveContainer width="100%" height={350}>
+        <LineChart data={productTrendData} margin={{ right: 100 }}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="month" tick={{fontSize:10}} />
+          <YAxis tickFormatter={v => fmt(v)} tick={{fontSize:10}} />
+          <Tooltip formatter={(v, name) => { const idx = parseInt(name.replace('p', '')); return [fmt(v), top5Products[idx]?.name || '']; }} />
+          {top5Products.map((p, i) => (
+            <Line 
+              key={i} 
+              type="monotone" 
+              dataKey={`p${i}`} 
+              stroke={COLORS[i]} 
+              strokeWidth={2} 
+              dot={{ r: 2 }} 
+              name={`p${i}`}
+              label={({ x, y, index }) => {
+                if (index !== productTrendData.length - 1) return null;
+                const name = p.name.length > 15 ? p.name.slice(0, 15) + '...' : p.name;
+                return <text x={x + 8} y={y} fill={COLORS[i]} fontSize={11} fontWeight="bold" dominantBaseline="middle">{name}</text>;
+              }}
+            />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
     </div>}
-    <div className="bg-white rounded-2xl shadow-lg p-6 border"><h3 className="text-lg font-bold mb-4">מוצרים בחנות ({prods.length})</h3>{prods.length > 0 ? <Table data={prods} cols={prodCols} name={'store_' + store.id + '_products'} compact /> : <p className="text-gray-500 text-center py-8">אין נתונים</p>}</div>
+    <div className="bg-white rounded-2xl shadow-lg p-6 border"><h3 className="text-lg font-bold mb-4">מוצרים בחנות ({prods.length}{excludedProducts.length > 0 ? ` מתוך ${allProds.length}` : ''})</h3>{prods.length > 0 ? <Table data={prods} cols={prodCols} name={'store_' + store.id + '_products'} compact /> : <p className="text-gray-500 text-center py-8">אין נתונים</p>}</div>
   </div>);
 };
 
@@ -1048,6 +1134,82 @@ const ExclusionSearch = ({ type, items, excluded, onToggle }) => {
   );
 };
 
+// Advanced Exclusion Search with temp/permanent options
+const ExclusionSearchAdvanced = ({ type, items, excludedTemp, excludedPerm, onToggleTemp, onTogglePerm }) => {
+  const [search, setSearch] = useState('');
+  const filtered = items.filter(i => i.name.toLowerCase().includes(search.toLowerCase())).slice(0, 20);
+  const isExcludedTemp = (id) => excludedTemp.includes(id);
+  const isExcludedPerm = (id) => excludedPerm.includes(id);
+  const isExcluded = (id) => isExcludedTemp(id) || isExcludedPerm(id);
+  
+  return (
+    <div className="space-y-2">
+      <div className="relative">
+        <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+        <input 
+          type="text" 
+          value={search} 
+          onChange={e => setSearch(e.target.value)} 
+          placeholder={type === 'stores' ? 'חפש חנות להחרגה...' : 'חפש מוצר להחרגה...'} 
+          className="w-full pr-10 pl-4 py-2 border rounded-lg text-sm"
+        />
+      </div>
+      {search && (
+        <div className="max-h-48 overflow-y-auto border rounded-lg bg-white">
+          {filtered.map(item => (
+            <div key={item.id} className={'flex items-center justify-between p-2 hover:bg-gray-50 border-b last:border-b-0 ' + (isExcluded(item.id) ? 'bg-red-50' : '')}>
+              <span className="text-sm flex-1">{item.name}</span>
+              <div className="flex gap-1">
+                {isExcludedTemp(item.id) ? (
+                  <button onClick={() => onToggleTemp(item.id)} className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded hover:bg-orange-200">בטל זמני</button>
+                ) : isExcludedPerm(item.id) ? (
+                  <button onClick={() => onTogglePerm(item.id)} className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded hover:bg-red-200">בטל קבוע</button>
+                ) : (
+                  <>
+                    <button onClick={() => onToggleTemp(item.id)} className="text-xs bg-orange-50 text-orange-600 px-2 py-0.5 rounded hover:bg-orange-100">זמני</button>
+                    <button onClick={() => onTogglePerm(item.id)} className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded hover:bg-red-100">קבוע</button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {/* Show excluded items */}
+      {excludedTemp.length > 0 && (
+        <div>
+          <p className="text-xs text-orange-600 mb-1">זמניים ({excludedTemp.length}):</p>
+          <div className="flex flex-wrap gap-1">
+            {excludedTemp.map(id => {
+              const item = items.find(i => i.id === id);
+              return item ? (
+                <span key={id} onClick={() => onToggleTemp(id)} className="inline-flex items-center gap-1 bg-orange-100 text-orange-700 px-2 py-0.5 rounded text-xs cursor-pointer hover:bg-orange-200">
+                  {item.name.slice(0, 12)}{item.name.length > 12 ? '...' : ''}<X size={10} />
+                </span>
+              ) : null;
+            })}
+          </div>
+        </div>
+      )}
+      {excludedPerm.length > 0 && (
+        <div>
+          <p className="text-xs text-red-600 mb-1">קבועים ({excludedPerm.length}):</p>
+          <div className="flex flex-wrap gap-1">
+            {excludedPerm.map(id => {
+              const item = items.find(i => i.id === id);
+              return item ? (
+                <span key={id} onClick={() => onTogglePerm(id)} className="inline-flex items-center gap-1 bg-red-100 text-red-700 px-2 py-0.5 rounded text-xs cursor-pointer hover:bg-red-200">
+                  {item.name.slice(0, 12)}{item.name.length > 12 ? '...' : ''}<X size={10} />
+                </span>
+              ) : null;
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function App() {
   const [loggedIn, setLoggedInState] = useState(false);
   const [tab, setTab] = useState('overview');
@@ -1057,34 +1219,75 @@ export default function App() {
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [excludedStores, setExcludedStores] = useState([]);
   const [excludedProducts, setExcludedProducts] = useState([]);
+  const [permanentExcludedStores, setPermanentExcludedStores] = useState([]);
+  const [permanentExcludedProducts, setPermanentExcludedProducts] = useState([]);
   const [showExclusions, setShowExclusions] = useState(false);
   
   useEffect(() => { 
     setConfig(getConfig()); 
     setLoggedInState(isLoggedIn());
+    // Load permanent exclusions
+    try {
+      const savedExc = localStorage.getItem('baron_permanent_exclusions');
+      if (savedExc) {
+        const parsed = JSON.parse(savedExc);
+        setPermanentExcludedStores(parsed.stores || []);
+        setPermanentExcludedProducts(parsed.products || []);
+      }
+    } catch {}
   }, []);
+  
+  // Save permanent exclusions when they change
+  const savePermanentExclusions = (stores, products) => {
+    localStorage.setItem('baron_permanent_exclusions', JSON.stringify({ stores, products }));
+  };
   
   const handleLogin = () => setLoggedInState(true);
   const handleLogout = () => { setLoggedIn(false); setLoggedInState(false); };
   
-  const toggleExcludeStore = (id) => {
-    setExcludedStores(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const toggleExcludeStore = (id, permanent = false) => {
+    if (permanent) {
+      setPermanentExcludedStores(prev => {
+        const newList = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+        savePermanentExclusions(newList, permanentExcludedProducts);
+        return newList;
+      });
+    } else {
+      setExcludedStores(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    }
   };
-  const toggleExcludeProduct = (id) => {
-    setExcludedProducts(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const toggleExcludeProduct = (id, permanent = false) => {
+    if (permanent) {
+      setPermanentExcludedProducts(prev => {
+        const newList = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+        savePermanentExclusions(permanentExcludedStores, newList);
+        return newList;
+      });
+    } else {
+      setExcludedProducts(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    }
   };
-  const clearExclusions = () => { setExcludedStores([]); setExcludedProducts([]); };
+  const clearTempExclusions = () => { setExcludedStores([]); setExcludedProducts([]); };
+  const clearPermanentExclusions = () => { 
+    setPermanentExcludedStores([]); 
+    setPermanentExcludedProducts([]); 
+    savePermanentExclusions([], []);
+  };
+  
+  // Combine temporary and permanent exclusions
+  const allExcludedStores = [...new Set([...excludedStores, ...permanentExcludedStores])];
+  const allExcludedProducts = [...new Set([...excludedProducts, ...permanentExcludedProducts])];
   
   // Apply config and filter exclusions
   const STORES = useMemo(() => {
     const configured = applyConfig(STORES_RAW, config);
-    return configured.filter(s => !excludedStores.includes(s.id));
-  }, [config, excludedStores]);
+    return configured.filter(s => !allExcludedStores.includes(s.id));
+  }, [config, allExcludedStores]);
   
   const PRODUCTS = useMemo(() => {
     const configured = applyConfig(PRODUCTS_RAW, config);
-    return configured.filter(p => !excludedProducts.includes(p.id));
-  }, [config, excludedProducts]);
+    return configured.filter(p => !allExcludedProducts.includes(p.id));
+  }, [config, allExcludedProducts]);
   
   const tabs = [
     { id: 'overview', l: 'סקירה', I: Home },
@@ -1100,7 +1303,7 @@ export default function App() {
   const nav = (t, i) => { if (t === 'store') { setStore(i); setTab('stores'); } else { setProduct(i); setTab('products'); } };
   
   const content = () => {
-    if (store) return <StoreDetail store={store} onBack={() => setStore(null)} allStores={STORES} />;
+    if (store) return <StoreDetail store={store} onBack={() => setStore(null)} allStores={STORES} excludedProducts={allExcludedProducts} />;
     if (product) return <ProductDetail product={product} onBack={() => setProduct(null)} />;
     switch (tab) {
       case 'overview': return <Overview stores={STORES} products={PRODUCTS} onNav={nav} />;
@@ -1120,7 +1323,9 @@ export default function App() {
     return <LoginScreen onLogin={handleLogin} />;
   }
   
-  const totalExclusions = excludedStores.length + excludedProducts.length;
+  const totalTempExclusions = excludedStores.length + excludedProducts.length;
+  const totalPermExclusions = permanentExcludedStores.length + permanentExcludedProducts.length;
+  const totalExclusions = allExcludedStores.length + allExcludedProducts.length;
   
   return (<div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50" dir="rtl">
     <header className="bg-white shadow-sm border-b sticky top-0 z-50 print:hidden">
@@ -1145,22 +1350,44 @@ export default function App() {
       <div className="bg-white border-b shadow-lg print:hidden">
         <div className="max-w-7xl mx-auto p-4">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-gray-800">🚫 החרגות זמניות</h3>
-            {totalExclusions > 0 && (
-              <button onClick={clearExclusions} className="text-sm text-red-600 hover:text-red-800">נקה הכל ({totalExclusions})</button>
-            )}
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm font-medium text-gray-700 mb-2">🏪 חנויות</p>
-              <ExclusionSearch type="stores" items={applyConfig(STORES_RAW, config)} excluded={excludedStores} onToggle={toggleExcludeStore} />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-700 mb-2">📦 מוצרים</p>
-              <ExclusionSearch type="products" items={applyConfig(PRODUCTS_RAW, config)} excluded={excludedProducts} onToggle={toggleExcludeProduct} />
+            <h3 className="font-bold text-gray-800">🚫 החרגות</h3>
+            <div className="flex gap-2">
+              {totalTempExclusions > 0 && <button onClick={clearTempExclusions} className="text-sm text-orange-600 hover:text-orange-800 px-2 py-1 bg-orange-50 rounded">נקה זמניות ({totalTempExclusions})</button>}
+              {totalPermExclusions > 0 && <button onClick={clearPermanentExclusions} className="text-sm text-red-600 hover:text-red-800 px-2 py-1 bg-red-50 rounded">נקה קבועות ({totalPermExclusions})</button>}
             </div>
           </div>
-          <p className="text-xs text-gray-400 mt-3">* ההחרגות הן זמניות ומתאפסות בטעינה מחדש של הדף</p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Stores Exclusion */}
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-gray-700">🏪 חנויות</p>
+              <ExclusionSearchAdvanced 
+                type="stores" 
+                items={applyConfig(STORES_RAW, config)} 
+                excludedTemp={excludedStores}
+                excludedPerm={permanentExcludedStores}
+                onToggleTemp={(id) => toggleExcludeStore(id, false)}
+                onTogglePerm={(id) => toggleExcludeStore(id, true)}
+              />
+            </div>
+            {/* Products Exclusion */}
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-gray-700">📦 מוצרים</p>
+              <ExclusionSearchAdvanced 
+                type="products" 
+                items={applyConfig(PRODUCTS_RAW, config)} 
+                excludedTemp={excludedProducts}
+                excludedPerm={permanentExcludedProducts}
+                onToggleTemp={(id) => toggleExcludeProduct(id, false)}
+                onTogglePerm={(id) => toggleExcludeProduct(id, true)}
+              />
+            </div>
+          </div>
+          
+          <div className="flex gap-4 mt-4 text-xs text-gray-500">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 bg-orange-400 rounded-full"></span>זמנית (מתאפס ברענון)</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 bg-red-500 rounded-full"></span>קבועה (נשמר)</span>
+          </div>
         </div>
       </div>
     )}
