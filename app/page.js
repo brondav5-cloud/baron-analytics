@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useMemo } from 'react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, Legend } from 'recharts';
-import { TrendingUp, TrendingDown, Store, Package, AlertTriangle, Award, XCircle, Search, Download, Filter, ChevronRight, ArrowUp, ArrowDown, Minus, Menu, X, Home, Bell, LogOut, User, Check, FileText, ChevronDown, Settings } from 'lucide-react';
+import { TrendingUp, TrendingDown, Store, Package, AlertTriangle, Award, XCircle, Search, Download, Filter, ChevronRight, ArrowUp, ArrowDown, Minus, Menu, X, Home, Bell, LogOut, User, Check, FileText, ChevronDown, Settings, HelpCircle } from 'lucide-react';
 import STORES from './stores.json';
 import PRODUCTS from './products.json';
 import FILTERS from './filters.json';
@@ -14,6 +14,25 @@ const STATUS_CFG = {
   'התאוששות': { bg: 'bg-amber-50', text: 'text-amber-600', Icon: TrendingUp },
   'ירידה מתונה': { bg: 'bg-orange-50', text: 'text-orange-600', Icon: TrendingDown },
   'התרסקות': { bg: 'bg-red-50', text: 'text-red-600', Icon: TrendingDown },
+};
+
+const Tip = ({ text }) => (
+  <div className="relative inline-block group mr-1">
+    <HelpCircle size={14} className="text-gray-400 hover:text-blue-500 cursor-help" />
+    <div className="absolute z-50 bottom-full right-0 mb-2 hidden group-hover:block w-48 p-2 bg-gray-800 text-white text-xs rounded-lg shadow-lg">
+      {text}
+      <div className="absolute top-full right-2 border-4 border-transparent border-t-gray-800"></div>
+    </div>
+  </div>
+);
+
+const METRIC_TIPS = {
+  '12v12': 'השוואת סך הכמות בכל 2024 מול כל 2025',
+  '6v6': 'השוואת ינו-יונ 2025 מול יול-דצמ 2025',
+  '3v3': 'השוואת אוק-דצמ 2024 מול אוק-דצמ 2025 (אותם חודשים, שנה מול שנה)',
+  '2v2': 'השוואת ספט-אוק מול נוב-דצמ 2025',
+  'peak': 'מרחק מהשיא = כמות דצמבר 2025 מול ממוצע 4 החודשים הגבוהים ביותר',
+  'returns': 'אחוז החזרות מהאספקה - השוואת חצי שנה ראשון מול שני',
 };
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#f97316', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
 const fmt = n => n != null ? new Intl.NumberFormat('he-IL').format(Math.round(n)) : '-';
@@ -121,7 +140,9 @@ const Table = ({ data, cols, onRow, name = 'data', compact = false }) => {
     <div className="overflow-x-auto">
       <table className="w-full">
         <thead className="bg-gray-50">
-          <tr>{cols.map(c => <th key={c.k} onClick={() => setSort(p => ({ k: c.k, d: p.k === c.k && p.d === 'desc' ? 'asc' : 'desc' }))} className="px-3 py-3 text-right text-xs font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 whitespace-pre-line">{c.l}{sort.k === c.k && <span className="text-blue-500 mr-1">{sort.d === 'asc' ? '↑' : '↓'}</span>}</th>)}</tr>
+          <tr>{cols.map(c => <th key={c.k} onClick={() => setSort(p => ({ k: c.k, d: p.k === c.k && p.d === 'desc' ? 'asc' : 'desc' }))} className="px-3 py-3 text-right text-xs font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 whitespace-pre-line">
+            <span className="flex items-center gap-1">{c.t && <Tip text={c.t} />}{c.l}{sort.k === c.k && <span className="text-blue-500 mr-1">{sort.d === 'asc' ? '↑' : '↓'}</span>}</span>
+          </th>)}</tr>
         </thead>
         <tbody className="divide-y">{rows.map((r, i) => <tr key={r.id || i} onClick={() => onRow && onRow(r)} className={'hover:bg-blue-50 ' + (onRow ? 'cursor-pointer' : '')}>{cols.map(c => <td key={c.k} className={'px-3 text-sm whitespace-nowrap ' + (compact ? 'py-2' : 'py-3')}>{c.r ? c.r(r[c.k], r) : r[c.k]}</td>)}</tr>)}</tbody>
       </table>
@@ -226,11 +247,11 @@ const StoresList = ({ stores, onSelect }) => {
   
   const cols = [
     { k: 'name', l: 'חנות', r: (v, r) => <div><p className="font-medium">{v}</p><p className="text-xs text-gray-500">{r.city}</p></div> },
-    { k: 'metric_12v12', l: 'שנתי\nינו-דצמ 24→25', r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
-    { k: 'metric_6v6', l: '6 חודשים\nינו-יונ→יול-דצמ', r: (v, r) => <MetricCell pct={v} from={r.qty_prev6} to={r.qty_last6} /> },
-    { k: 'metric_3v3', l: '3 חודשים\nאוק-דצמ 24→25', r: (v, r) => <MetricCell pct={v} from={r.qty_prev3} to={r.qty_last3} /> },
-    { k: 'metric_peak_distance', l: 'מרחק מהשיא', r: (v, r) => <PeakCell pct={v} peak={r.peak_value} current={r.current_value} /> },
-    { k: 'returns_pct_last6', l: 'חזרות %\nינו-יונ→יול-דצמ', r: (v, r) => <ReturnsCell pctL6={v} pctP6={r.returns_pct_prev6} change={r.returns_change} /> },
+    { k: 'metric_12v12', l: 'שנתי\nינו-דצמ 24→25', t: METRIC_TIPS['12v12'], r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
+    { k: 'metric_6v6', l: '6 חודשים\nינו-יונ→יול-דצמ', t: METRIC_TIPS['6v6'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev6} to={r.qty_last6} /> },
+    { k: 'metric_3v3', l: '3 חודשים\nאוק-דצמ 24→25', t: METRIC_TIPS['3v3'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev3} to={r.qty_last3} /> },
+    { k: 'metric_peak_distance', l: 'מרחק מהשיא', t: METRIC_TIPS['peak'], r: (v, r) => <PeakCell pct={v} peak={r.peak_value} current={r.current_value} /> },
+    { k: 'returns_pct_last6', l: 'חזרות %\nינו-יונ→יול-דצמ', t: METRIC_TIPS['returns'], r: (v, r) => <ReturnsCell pctL6={v} pctP6={r.returns_pct_prev6} change={r.returns_change} /> },
     { k: 'status', l: 'סטטוס', r: v => <Badge status={v} sm /> },
     { k: 'qty_total', l: 'כמות\nכוללת', r: v => <span className="font-bold">{fmt(v)}</span> },
   ];
@@ -320,11 +341,11 @@ const ProductsList = ({ products, onSelect }) => {
   
   const cols = [
     { k: 'name', l: 'מוצר', r: (v, r) => <div><p className="font-medium">{v}</p><p className="text-xs text-gray-500">{r.category}</p></div> },
-    { k: 'metric_12v12', l: 'שנתי\nינו-דצמ 24→25', r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
-    { k: 'metric_6v6', l: '6 חודשים\nינו-יונ→יול-דצמ', r: (v, r) => <MetricCell pct={v} from={r.qty_prev6} to={r.qty_last6} /> },
-    { k: 'metric_3v3', l: '3 חודשים\nאוק-דצמ 24→25', r: (v, r) => <MetricCell pct={v} from={r.qty_prev3} to={r.qty_last3} /> },
-    { k: 'metric_peak_distance', l: 'מרחק מהשיא', r: (v, r) => <PeakCell pct={v} peak={r.peak_value} current={r.current_value} /> },
-    { k: 'returns_pct_last6', l: 'חזרות %\nינו-יונ→יול-דצמ', r: (v, r) => <ReturnsCell pctL6={v} pctP6={r.returns_pct_prev6} change={r.returns_change} /> },
+    { k: 'metric_12v12', l: 'שנתי\nינו-דצמ 24→25', t: METRIC_TIPS['12v12'], r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
+    { k: 'metric_6v6', l: '6 חודשים\nינו-יונ→יול-דצמ', t: METRIC_TIPS['6v6'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev6} to={r.qty_last6} /> },
+    { k: 'metric_3v3', l: '3 חודשים\nאוק-דצמ 24→25', t: METRIC_TIPS['3v3'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev3} to={r.qty_last3} /> },
+    { k: 'metric_peak_distance', l: 'מרחק מהשיא', t: METRIC_TIPS['peak'], r: (v, r) => <PeakCell pct={v} peak={r.peak_value} current={r.current_value} /> },
+    { k: 'returns_pct_last6', l: 'חזרות %\nינו-יונ→יול-דצמ', t: METRIC_TIPS['returns'], r: (v, r) => <ReturnsCell pctL6={v} pctP6={r.returns_pct_prev6} change={r.returns_change} /> },
     { k: 'status', l: 'סטטוס', r: v => <Badge status={v} sm /> },
     { k: 'total_sales', l: 'מחזור', r: v => <span className="font-bold text-gray-600">₪{fmt(v)}</span> },
     { k: 'qty_total', l: 'כמות', r: v => <span className="font-bold">{fmt(v)}</span> },
