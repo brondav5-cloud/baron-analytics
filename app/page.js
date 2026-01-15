@@ -84,10 +84,10 @@ const ReturnsCell = ({ pctL6, pctP6, change }) => (
   </div>
 );
 
-const PeakCell = ({ pct, peak, peakMonth, current }) => (
+const PeakCell = ({ pct, peak, current, currentMonth }) => (
   <div className="text-center">
     <span className={`font-bold ${pct >= -20 ? 'text-emerald-600' : pct >= -40 ? 'text-orange-500' : 'text-red-600'}`}>{fmtPct(pct)}</span>
-    <p className="text-xs text-gray-400">עכשיו: {fmt(current)} | שיא: {fmt(peak)}</p>
+    <p className="text-xs text-gray-400">שיא(4): {fmt(peak)} | דצמ: {fmt(current)}</p>
   </div>
 );
 
@@ -228,8 +228,8 @@ const StoresList = ({ stores, onSelect }) => {
     { k: 'name', l: 'חנות', r: (v, r) => <div><p className="font-medium">{v}</p><p className="text-xs text-gray-500">{r.city}</p></div> },
     { k: 'metric_12v12', l: 'שנתי\nינו-דצמ 24→25', r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
     { k: 'metric_6v6', l: '6 חודשים\nינו-יונ→יול-דצמ', r: (v, r) => <MetricCell pct={v} from={r.qty_prev6} to={r.qty_last6} /> },
-    { k: 'metric_3v3', l: '3 חודשים\nיול-ספט→אוק-דצמ', r: (v, r) => <MetricCell pct={v} from={r.qty_prev3} to={r.qty_last3} /> },
-    { k: 'metric_peak_distance', l: 'מרחק מהשיא', r: (v, r) => <PeakCell pct={v} peak={r.peak_value} peakMonth={r.peak_month} current={r.current_value} /> },
+    { k: 'metric_3v3', l: '3 חודשים\nאוק-דצמ 24→25', r: (v, r) => <MetricCell pct={v} from={r.qty_prev3} to={r.qty_last3} /> },
+    { k: 'metric_peak_distance', l: 'מרחק מהשיא', r: (v, r) => <PeakCell pct={v} peak={r.peak_value} current={r.current_value} /> },
     { k: 'returns_pct_last6', l: 'חזרות %\nינו-יונ→יול-דצמ', r: (v, r) => <ReturnsCell pctL6={v} pctP6={r.returns_pct_prev6} change={r.returns_change} /> },
     { k: 'status', l: 'סטטוס', r: v => <Badge status={v} sm /> },
     { k: 'qty_total', l: 'כמות\nכוללת', r: v => <span className="font-bold">{fmt(v)}</span> },
@@ -251,7 +251,7 @@ const StoresList = ({ stores, onSelect }) => {
         <MultiSelect label="סוכן" opts={FILTERS.agents || []} selected={agents} onChange={setAgents} />
         <MultiSelect label="סטטוס" opts={['צמיחה','יציב','התאוששות','ירידה מתונה','התרסקות']} selected={statuses} onChange={setStatuses} />
         <div>
-          <label className="text-xs text-gray-600 block mb-1">מינימום פריטים</label>
+          <label className="text-xs text-gray-600 block mb-1">מינימום פריטים (כולל)</label>
           <input type="number" value={minQty || ''} onChange={e => setMinQty(Number(e.target.value) || 0)} placeholder="0" className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
         </div>
       </div>
@@ -290,9 +290,9 @@ const StoreDetail = ({ store, onBack }) => {
     <div className="grid grid-cols-3 lg:grid-cols-6 gap-3">
       <MBox label="שנתי (ינו-דצמ 24→25)" value={store.metric_12v12} sub={fmt(store.qty_2024) + '→' + fmt(store.qty_2025)} />
       <MBox label="6 חודשים (ינו-יונ→יול-דצמ)" value={store.metric_6v6} sub={fmt(store.qty_prev6) + '→' + fmt(store.qty_last6)} />
-      <MBox label="3 חודשים (יול-ספט→אוק-דצמ)" value={store.metric_3v3} sub={fmt(store.qty_prev3) + '→' + fmt(store.qty_last3)} />
+      <MBox label="3 חודשים (אוק-דצמ 24→25)" value={store.metric_3v3} sub={fmt(store.qty_prev3) + '→' + fmt(store.qty_last3)} />
       <MBox label="2 חודשים (ספט-אוק→נוב-דצמ)" value={store.metric_2v2} sub={fmt(store.qty_prev2) + '→' + fmt(store.qty_last2)} />
-      <MBox label="מרחק מהשיא" value={store.metric_peak_distance} extra={'עכשיו: ' + fmt(store.current_value) + ' | שיא: ' + fmt(store.peak_value) + ' (' + fmtMonthHeb(store.peak_month) + ')'} />
+      <MBox label="מרחק מהשיא" value={store.metric_peak_distance} extra={'שיא (ממוצע 4): ' + fmt(store.peak_value) + ' | דצמ: ' + fmt(store.current_value)} />
       <MBox label="חזרות % (ינו-יונ→יול-דצמ)" value={(store.returns_pct_prev6?.toFixed(1) || 0) + '%→' + (store.returns_pct_last6?.toFixed(1) || 0) + '%'} sub={'שינוי: ' + (store.returns_change > 0 ? '+' : '') + (store.returns_change?.toFixed(1) || 0) + '%'} pos={store.returns_change <= 0} />
     </div>
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -322,8 +322,8 @@ const ProductsList = ({ products, onSelect }) => {
     { k: 'name', l: 'מוצר', r: (v, r) => <div><p className="font-medium">{v}</p><p className="text-xs text-gray-500">{r.category}</p></div> },
     { k: 'metric_12v12', l: 'שנתי\nינו-דצמ 24→25', r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
     { k: 'metric_6v6', l: '6 חודשים\nינו-יונ→יול-דצמ', r: (v, r) => <MetricCell pct={v} from={r.qty_prev6} to={r.qty_last6} /> },
-    { k: 'metric_3v3', l: '3 חודשים\nיול-ספט→אוק-דצמ', r: (v, r) => <MetricCell pct={v} from={r.qty_prev3} to={r.qty_last3} /> },
-    { k: 'metric_peak_distance', l: 'מרחק מהשיא', r: (v, r) => <PeakCell pct={v} peak={r.peak_value} peakMonth={r.peak_month} current={r.current_value} /> },
+    { k: 'metric_3v3', l: '3 חודשים\nאוק-דצמ 24→25', r: (v, r) => <MetricCell pct={v} from={r.qty_prev3} to={r.qty_last3} /> },
+    { k: 'metric_peak_distance', l: 'מרחק מהשיא', r: (v, r) => <PeakCell pct={v} peak={r.peak_value} current={r.current_value} /> },
     { k: 'returns_pct_last6', l: 'חזרות %\nינו-יונ→יול-דצמ', r: (v, r) => <ReturnsCell pctL6={v} pctP6={r.returns_pct_prev6} change={r.returns_change} /> },
     { k: 'status', l: 'סטטוס', r: v => <Badge status={v} sm /> },
     { k: 'total_sales', l: 'מחזור', r: v => <span className="font-bold text-gray-600">₪{fmt(v)}</span> },
@@ -338,7 +338,7 @@ const ProductsList = ({ products, onSelect }) => {
         <MultiSelect opts={FILTERS.categories || []} selected={cats} onChange={setCats} placeholder="קטגוריה" />
         <MultiSelect opts={['צמיחה','יציב','התאוששות','ירידה מתונה','התרסקות']} selected={statuses} onChange={setStatuses} placeholder="סטטוס" />
         <div className="flex items-center gap-2">
-          <input type="number" value={minQty || ''} onChange={e => setMinQty(Number(e.target.value) || 0)} placeholder="מינ׳ פריטים" className="w-28 px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+          <input type="number" value={minQty || ''} onChange={e => setMinQty(Number(e.target.value) || 0)} placeholder="מינ׳ (כולל)" className="w-28 px-3 py-2 border border-gray-200 rounded-xl text-sm" />
         </div>
       </div>
     </div>
@@ -375,9 +375,9 @@ const ProductDetail = ({ product, onBack }) => {
     <div className="grid grid-cols-3 lg:grid-cols-6 gap-3">
       <MBox label="שנתי (ינו-דצמ 24→25)" value={product.metric_12v12} sub={fmt(product.qty_2024) + '→' + fmt(product.qty_2025)} />
       <MBox label="6 חודשים (ינו-יונ→יול-דצמ)" value={product.metric_6v6} sub={fmt(product.qty_prev6) + '→' + fmt(product.qty_last6)} />
-      <MBox label="3 חודשים (יול-ספט→אוק-דצמ)" value={product.metric_3v3} sub={fmt(product.qty_prev3) + '→' + fmt(product.qty_last3)} />
+      <MBox label="3 חודשים (אוק-דצמ 24→25)" value={product.metric_3v3} sub={fmt(product.qty_prev3) + '→' + fmt(product.qty_last3)} />
       <MBox label="2 חודשים (ספט-אוק→נוב-דצמ)" value={product.metric_2v2} sub={fmt(product.qty_prev2) + '→' + fmt(product.qty_last2)} />
-      <MBox label="מרחק מהשיא" value={product.metric_peak_distance} extra={'עכשיו: ' + fmt(product.current_value) + ' | שיא: ' + fmt(product.peak_value) + ' (' + fmtMonthHeb(product.peak_month) + ')'} />
+      <MBox label="מרחק מהשיא" value={product.metric_peak_distance} extra={'שיא (ממוצע 4): ' + fmt(product.peak_value) + ' | דצמ: ' + fmt(product.current_value)} />
       <MBox label="חזרות % (ינו-יונ→יול-דצמ)" value={(product.returns_pct_prev6?.toFixed(1) || 0) + '%→' + (product.returns_pct_last6?.toFixed(1) || 0) + '%'} sub={'שינוי: ' + (product.returns_change > 0 ? '+' : '') + (product.returns_change?.toFixed(1) || 0) + '%'} pos={product.returns_change <= 0} />
     </div>
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -391,7 +391,7 @@ const ProductDetail = ({ product, onBack }) => {
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-bold">חנויות שמוכרות ({stores.length}{minQty > 0 ? ` מתוך ${allStores.length}` : ''})</h3>
         <div className="flex items-center gap-2 print:hidden">
-          <label className="text-sm text-gray-600">מינימום פריטים:</label>
+          <label className="text-sm text-gray-600">מינימום פריטים (כולל):</label>
           <input type="number" value={minQty || ''} onChange={e => setMinQty(Number(e.target.value) || 0)} placeholder="0" className="w-24 px-3 py-1.5 border border-gray-200 rounded-lg text-sm" />
         </div>
       </div>
@@ -418,7 +418,7 @@ const Alerts = ({ stores, onSelect }) => {
         <div className="grid grid-cols-3 gap-3 text-center">
           <div className="bg-red-50 rounded-lg p-2"><p className="text-xs text-gray-500">שנתי (24→25)</p><p className="font-bold text-red-600">{fmtPct(s.metric_12v12)}</p></div>
           <div className="bg-red-50 rounded-lg p-2"><p className="text-xs text-gray-500">ירידה רצופה</p><p className="font-bold text-red-600">{s.declining_months || 0} חודשים</p>{s.declining_months_list && s.declining_months_list.length > 0 && <p className="text-xs text-gray-400 mt-1">{s.declining_months_list.slice(-3).reverse().map(m => fmtMonth(m)).join('→')}</p>}</div>
-          <div className="bg-red-50 rounded-lg p-2"><p className="text-xs text-gray-500">מרחק מהשיא</p><p className="font-bold text-red-600">{fmtPct(s.metric_peak_distance)}</p><p className="text-xs text-gray-400">עכשיו: {fmt(s.current_value)}</p></div>
+          <div className="bg-red-50 rounded-lg p-2"><p className="text-xs text-gray-500">מרחק מהשיא</p><p className="font-bold text-red-600">{fmtPct(s.metric_peak_distance)}</p><p className="text-xs text-gray-400">שיא(4): {fmt(s.peak_value)} | דצמ: {fmt(s.current_value)}</p></div>
         </div>
       </div>
     )}</div>}
