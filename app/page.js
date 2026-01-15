@@ -700,12 +700,32 @@ const StoreDetail = ({ store, onBack, allStores, excludedProducts = [] }) => {
     </div>}
     {productTrendData.length > 0 && top5Products.length > 0 && <div className="bg-white rounded-2xl shadow-lg p-6 border">
       <h3 className="text-lg font-bold mb-4">📈 מגמת 5 מוצרים מובילים {excludedProducts.length > 0 && <span className="text-sm font-normal text-orange-600">(ללא מוחרגים)</span>}</h3>
-      <ResponsiveContainer width="100%" height={350}>
-        <LineChart data={productTrendData} margin={{ right: 100 }}>
+      <ResponsiveContainer width="100%" height={300}>
+        <LineChart data={productTrendData}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="month" tick={{fontSize:10}} />
           <YAxis tickFormatter={v => fmt(v)} tick={{fontSize:10}} />
-          <Tooltip formatter={(v, name) => { const idx = parseInt(name.replace('p', '')); return [fmt(v), top5Products[idx]?.name || '']; }} />
+          <Tooltip 
+            content={({ active, payload, label }) => {
+              if (!active || !payload?.length) return null;
+              return (
+                <div className="bg-white p-3 rounded-lg shadow-lg border text-right">
+                  <p className="font-bold text-gray-700 mb-2">{label}</p>
+                  {payload.map((p, i) => {
+                    const idx = parseInt(p.dataKey.replace('p', ''));
+                    const product = top5Products[idx];
+                    return (
+                      <div key={i} className="flex items-center gap-2 py-1">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: p.color }}></div>
+                        <span className="font-medium text-sm" style={{ color: p.color }}>{product?.name}</span>
+                        <span className="font-bold mr-auto">{fmt(p.value)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            }}
+          />
           {top5Products.map((p, i) => (
             <Line 
               key={i} 
@@ -713,17 +733,22 @@ const StoreDetail = ({ store, onBack, allStores, excludedProducts = [] }) => {
               dataKey={`p${i}`} 
               stroke={COLORS[i]} 
               strokeWidth={2} 
-              dot={{ r: 2 }} 
+              dot={{ r: 3 }} 
+              activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
               name={`p${i}`}
-              label={({ x, y, index }) => {
-                if (index !== productTrendData.length - 1) return null;
-                const name = p.name.length > 15 ? p.name.slice(0, 15) + '...' : p.name;
-                return <text x={x + 8} y={y} fill={COLORS[i]} fontSize={11} fontWeight="bold" dominantBaseline="middle">{name}</text>;
-              }}
             />
           ))}
         </LineChart>
       </ResponsiveContainer>
+      {/* Legend at bottom */}
+      <div className="flex flex-wrap justify-center gap-4 mt-4 pt-4 border-t">
+        {top5Products.map((p, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded-full" style={{ backgroundColor: COLORS[i] }}></div>
+            <span className="text-sm font-medium">{p.name.length > 20 ? p.name.slice(0, 20) + '...' : p.name}</span>
+          </div>
+        ))}
+      </div>
     </div>}
     <div className="bg-white rounded-2xl shadow-lg p-6 border"><h3 className="text-lg font-bold mb-4">מוצרים בחנות ({prods.length}{excludedProducts.length > 0 ? ` מתוך ${allProds.length}` : ''})</h3>{prods.length > 0 ? <Table data={prods} cols={prodCols} name={'store_' + store.id + '_products'} compact /> : <p className="text-gray-500 text-center py-8">אין נתונים</p>}</div>
   </div>);
