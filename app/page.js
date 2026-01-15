@@ -19,17 +19,17 @@ const STATUS_CFG = {
 const Tip = ({ text }) => {
   const [show, setShow] = useState(false);
   return (
-    <div className="relative inline-block mr-1">
+    <div className="relative inline-flex mr-1">
       <HelpCircle 
         size={14} 
-        className="text-gray-400 hover:text-blue-500 cursor-help" 
+        className="text-gray-400 hover:text-blue-500 cursor-help flex-shrink-0" 
         onMouseEnter={() => setShow(true)}
         onMouseLeave={() => setShow(false)}
       />
       {show && (
-        <div className="absolute z-[100] bottom-full right-0 mb-2 w-52 p-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl whitespace-normal">
+        <div className="fixed z-[9999] transform -translate-y-full -translate-x-1/2 mb-2 w-56 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-2xl whitespace-normal text-right" 
+             style={{ marginTop: '-8px' }}>
           {text}
-          <div className="absolute top-full right-2 border-4 border-transparent border-t-gray-900"></div>
         </div>
       )}
     </div>
@@ -53,6 +53,22 @@ const fmtMonthHeb = m => { if (!m) return '-'; const ms = ['','ינו','פבר',
 const Badge = ({ status, sm }) => { 
   const c = STATUS_CFG[status] || STATUS_CFG['יציב']; 
   return <span className={`inline-flex items-center gap-1 rounded-full font-medium ${c.bg} ${c.text} ${sm ? 'px-2 py-0.5 text-xs' : 'px-3 py-1 text-sm'}`}><c.Icon size={sm ? 12 : 14} />{status}</span>; 
+};
+
+const StatusBadge = ({ status, recovery, sm }) => {
+  const c = STATUS_CFG[status] || STATUS_CFG['יציב'];
+  return (
+    <div className="flex flex-col gap-1">
+      <span className={`inline-flex items-center gap-1 rounded-full font-medium ${c.bg} ${c.text} ${sm ? 'px-2 py-0.5 text-xs' : 'px-2 py-0.5 text-xs'}`}>
+        <c.Icon size={12} />{status}
+      </span>
+      {recovery && (
+        <span className="inline-flex items-center gap-1 rounded-full font-medium bg-amber-50 text-amber-600 px-2 py-0.5 text-xs">
+          <TrendingUp size={10} />התאוששות
+        </span>
+      )}
+    </div>
+  );
 };
 
 const Card = ({ title, value, sub, trend, icon: Icon, color = 'blue' }) => {
@@ -260,9 +276,10 @@ const StoresList = ({ stores, onSelect }) => {
     { k: 'metric_12v12', l: 'שנתי\nינו-דצמ 24→25', t: METRIC_TIPS['12v12'], r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
     { k: 'metric_6v6', l: '6 חודשים\nינו-יונ→יול-דצמ', t: METRIC_TIPS['6v6'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev6} to={r.qty_last6} /> },
     { k: 'metric_3v3', l: '3 חודשים\nאוק-דצמ 24→25', t: METRIC_TIPS['3v3'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev3} to={r.qty_last3} /> },
+    { k: 'metric_2v2', l: '2 חודשים\nספט-אוק→נוב-דצמ', t: METRIC_TIPS['2v2'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev2} to={r.qty_last2} /> },
     { k: 'metric_peak_distance', l: 'מרחק מהשיא', t: METRIC_TIPS['peak'], r: (v, r) => <PeakCell pct={v} peak={r.peak_value} current={r.current_value} /> },
     { k: 'returns_pct_last6', l: 'חזרות %\nינו-יונ→יול-דצמ', t: METRIC_TIPS['returns'], r: (v, r) => <ReturnsCell pctL6={v} pctP6={r.returns_pct_prev6} change={r.returns_change} /> },
-    { k: 'status', l: 'סטטוס', r: v => <Badge status={v} sm /> },
+    { k: 'status', l: 'סטטוס', r: (v, r) => <StatusBadge status={v} recovery={r.is_recovering} /> },
     { k: 'qty_total', l: 'כמות\nכוללת', r: v => <span className="font-bold">{fmt(v)}</span> },
   ];
   
@@ -300,9 +317,12 @@ const StoreDetail = ({ store, onBack }) => {
   
   const prodCols = [
     { k: 'name', l: 'מוצר', r: (v, r) => <div><p className="font-medium">{v}</p><p className="text-xs text-gray-500">{r.category}</p></div> },
-    { k: 'metric_12v12', l: '12/12\n(2024↔2025)', r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
-    { k: 'metric_6v6', l: '6/6', r: v => <span className={'font-bold ' + (v >= 0 ? 'text-emerald-600' : 'text-red-600')}>{fmtPct(v)}</span> },
-    { k: 'metric_3v3', l: '3/3', r: v => <span className={'font-bold ' + (v >= 0 ? 'text-emerald-600' : 'text-red-600')}>{fmtPct(v)}</span> },
+    { k: 'metric_12v12', l: 'שנתי\n24→25', t: METRIC_TIPS['12v12'], r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
+    { k: 'metric_6v6', l: '6 חודשים', t: METRIC_TIPS['6v6'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev6} to={r.qty_last6} /> },
+    { k: 'metric_3v3', l: '3 חודשים', t: METRIC_TIPS['3v3'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev3} to={r.qty_last3} /> },
+    { k: 'metric_2v2', l: '2 חודשים', t: METRIC_TIPS['2v2'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev2} to={r.qty_last2} /> },
+    { k: 'metric_peak_distance', l: 'מרחק מהשיא', t: METRIC_TIPS['peak'], r: (v, r) => <PeakCell pct={v} peak={r.peak_value} current={r.current_value} /> },
+    { k: 'returns_pct_last6', l: 'חזרות %', t: METRIC_TIPS['returns'], r: (v, r) => <ReturnsCell pctL6={v} pctP6={r.returns_pct_prev6} change={r.returns_change} /> },
     { k: 'status', l: 'סטטוס', r: v => <Badge status={v} sm /> },
     { k: 'qty_total', l: 'כמות', r: v => <span className="font-bold">{fmt(v)}</span> },
   ];
@@ -354,9 +374,10 @@ const ProductsList = ({ products, onSelect }) => {
     { k: 'metric_12v12', l: 'שנתי\nינו-דצמ 24→25', t: METRIC_TIPS['12v12'], r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
     { k: 'metric_6v6', l: '6 חודשים\nינו-יונ→יול-דצמ', t: METRIC_TIPS['6v6'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev6} to={r.qty_last6} /> },
     { k: 'metric_3v3', l: '3 חודשים\nאוק-דצמ 24→25', t: METRIC_TIPS['3v3'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev3} to={r.qty_last3} /> },
+    { k: 'metric_2v2', l: '2 חודשים\nספט-אוק→נוב-דצמ', t: METRIC_TIPS['2v2'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev2} to={r.qty_last2} /> },
     { k: 'metric_peak_distance', l: 'מרחק מהשיא', t: METRIC_TIPS['peak'], r: (v, r) => <PeakCell pct={v} peak={r.peak_value} current={r.current_value} /> },
     { k: 'returns_pct_last6', l: 'חזרות %\nינו-יונ→יול-דצמ', t: METRIC_TIPS['returns'], r: (v, r) => <ReturnsCell pctL6={v} pctP6={r.returns_pct_prev6} change={r.returns_change} /> },
-    { k: 'status', l: 'סטטוס', r: v => <Badge status={v} sm /> },
+    { k: 'status', l: 'סטטוס', r: (v, r) => <StatusBadge status={v} recovery={r.is_recovering} /> },
     { k: 'total_sales', l: 'מחזור', r: v => <span className="font-bold text-gray-600">₪{fmt(v)}</span> },
     { k: 'qty_total', l: 'כמות', r: v => <span className="font-bold">{fmt(v)}</span> },
   ];
@@ -385,9 +406,12 @@ const ProductDetail = ({ product, onBack }) => {
   
   const storeCols = [
     { k: 'name', l: 'חנות', r: (v, r) => <div><p className="font-medium">{v}</p><p className="text-xs text-gray-500">{r.city}</p></div> },
-    { k: 'metric_12v12', l: 'שנתי\n24→25', r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
-    { k: 'metric_6v6', l: '6 חודשים', r: v => <span className={'font-bold ' + (v >= 0 ? 'text-emerald-600' : 'text-red-600')}>{fmtPct(v)}</span> },
-    { k: 'metric_3v3', l: '3 חודשים', r: v => <span className={'font-bold ' + (v >= 0 ? 'text-emerald-600' : 'text-red-600')}>{fmtPct(v)}</span> },
+    { k: 'metric_12v12', l: 'שנתי\n24→25', t: METRIC_TIPS['12v12'], r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
+    { k: 'metric_6v6', l: '6 חודשים', t: METRIC_TIPS['6v6'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev6} to={r.qty_last6} /> },
+    { k: 'metric_3v3', l: '3 חודשים', t: METRIC_TIPS['3v3'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev3} to={r.qty_last3} /> },
+    { k: 'metric_2v2', l: '2 חודשים', t: METRIC_TIPS['2v2'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev2} to={r.qty_last2} /> },
+    { k: 'metric_peak_distance', l: 'מרחק מהשיא', t: METRIC_TIPS['peak'], r: (v, r) => <PeakCell pct={v} peak={r.peak_value} current={r.current_value} /> },
+    { k: 'returns_pct_last6', l: 'חזרות %', t: METRIC_TIPS['returns'], r: (v, r) => <ReturnsCell pctL6={v} pctP6={r.returns_pct_prev6} change={r.returns_change} /> },
     { k: 'status', l: 'סטטוס', r: v => <Badge status={v} sm /> },
     { k: 'qty_total', l: 'כמות', r: v => <span className="font-bold">{fmt(v)}</span> },
   ];
@@ -536,90 +560,74 @@ const Trends = ({ stores, products }) => {
   </div>);
 };
 
+const DEFAULT_CONFIG = {
+  recovery_threshold: 10, // 3v3 or 2v2 minimum for recovery tag
+  min_qty_filter: 0,
+};
+
+const getConfig = () => {
+  if (typeof window === 'undefined') return DEFAULT_CONFIG;
+  try {
+    const saved = localStorage.getItem('baron_config');
+    return saved ? { ...DEFAULT_CONFIG, ...JSON.parse(saved) } : DEFAULT_CONFIG;
+  } catch { return DEFAULT_CONFIG; }
+};
+
+const saveConfig = (config) => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('baron_config', JSON.stringify(config));
+  }
+};
+
 const SettingsPage = () => {
-  const [statusConfig, setStatusConfig] = useState({
-    growth_12v12: 10,
-    growth_3v3: 0,
-    growth_6v6: 5,
-    recovery_12v12: 0,
-    recovery_3v3: 10,
-    stable_min: -10,
-    stable_max: 10,
-    stable_3v3: -10,
-    decline_12v12: -10,
-    decline_months: 3,
-    crash_12v12: -30,
-    crash_peak: -50,
-    crash_months: 6
-  });
-  
+  const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [saved, setSaved] = useState(false);
   
+  // Load from localStorage on mount
+  React.useEffect(() => {
+    setConfig(getConfig());
+  }, []);
+  
   const handleSave = () => {
+    saveConfig(config);
     setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setTimeout(() => {
+      setSaved(false);
+      window.location.reload(); // Reload to apply changes
+    }, 1000);
+  };
+  
+  const handleReset = () => {
+    setConfig(DEFAULT_CONFIG);
+    saveConfig(DEFAULT_CONFIG);
+    window.location.reload();
   };
   
   return (<div className="space-y-6">
     <h2 className="text-xl font-bold">הגדרות</h2>
     
     <div className="bg-white rounded-2xl shadow-lg p-6 border">
-      <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Settings size={20}/>הגדרות סטטוסים</h3>
-      <p className="text-sm text-gray-500 mb-6">הגדר את הסיפים לחישוב סטטוס כל חנות/מוצר</p>
+      <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Settings size={20}/>הגדרות תצוגה</h3>
       
       <div className="space-y-6">
-        <div className="p-4 bg-emerald-50 rounded-xl">
-          <h4 className="font-bold text-emerald-700 mb-3">🚀 צמיחה</h4>
-          <p className="text-xs text-gray-600 mb-3">12/12 ≥ X% AND (3/3 ≥ Y% OR 6/6 ≥ Z%)</p>
-          <div className="grid grid-cols-3 gap-3">
-            <div><label className="text-xs text-gray-600">12/12 מינימום</label><input type="number" value={statusConfig.growth_12v12} onChange={e => setStatusConfig({...statusConfig, growth_12v12: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
-            <div><label className="text-xs text-gray-600">3/3 מינימום</label><input type="number" value={statusConfig.growth_3v3} onChange={e => setStatusConfig({...statusConfig, growth_3v3: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
-            <div><label className="text-xs text-gray-600">6/6 מינימום</label><input type="number" value={statusConfig.growth_6v6} onChange={e => setStatusConfig({...statusConfig, growth_6v6: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
-          </div>
-        </div>
-        
         <div className="p-4 bg-amber-50 rounded-xl">
-          <h4 className="font-bold text-amber-700 mb-3">📈 התאוששות</h4>
-          <p className="text-xs text-gray-600 mb-3">12/12 &lt; X% BUT 3/3 ≥ Y%</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className="text-xs text-gray-600">12/12 מקסימום</label><input type="number" value={statusConfig.recovery_12v12} onChange={e => setStatusConfig({...statusConfig, recovery_12v12: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
-            <div><label className="text-xs text-gray-600">3/3 מינימום</label><input type="number" value={statusConfig.recovery_3v3} onChange={e => setStatusConfig({...statusConfig, recovery_3v3: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
-          </div>
-        </div>
-        
-        <div className="p-4 bg-blue-50 rounded-xl">
-          <h4 className="font-bold text-blue-700 mb-3">⚖️ יציב</h4>
-          <p className="text-xs text-gray-600 mb-3">X% ≤ 12/12 &lt; Y% AND 3/3 &gt; Z%</p>
-          <div className="grid grid-cols-3 gap-3">
-            <div><label className="text-xs text-gray-600">12/12 מינימום</label><input type="number" value={statusConfig.stable_min} onChange={e => setStatusConfig({...statusConfig, stable_min: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
-            <div><label className="text-xs text-gray-600">12/12 מקסימום</label><input type="number" value={statusConfig.stable_max} onChange={e => setStatusConfig({...statusConfig, stable_max: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
-            <div><label className="text-xs text-gray-600">3/3 מינימום</label><input type="number" value={statusConfig.stable_3v3} onChange={e => setStatusConfig({...statusConfig, stable_3v3: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
-          </div>
-        </div>
-        
-        <div className="p-4 bg-orange-50 rounded-xl">
-          <h4 className="font-bold text-orange-700 mb-3">📉 ירידה מתונה</h4>
-          <p className="text-xs text-gray-600 mb-3">12/12 &lt; X% OR declining ≥ Y months</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className="text-xs text-gray-600">12/12 מקסימום</label><input type="number" value={statusConfig.decline_12v12} onChange={e => setStatusConfig({...statusConfig, decline_12v12: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
-            <div><label className="text-xs text-gray-600">חודשי ירידה</label><input type="number" value={statusConfig.decline_months} onChange={e => setStatusConfig({...statusConfig, decline_months: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
-          </div>
-        </div>
-        
-        <div className="p-4 bg-red-50 rounded-xl">
-          <h4 className="font-bold text-red-700 mb-3">💥 התרסקות</h4>
-          <p className="text-xs text-gray-600 mb-3">12/12 &lt; X% OR peak_distance &lt; Y% OR declining ≥ Z months</p>
-          <div className="grid grid-cols-3 gap-3">
-            <div><label className="text-xs text-gray-600">12/12 מקסימום</label><input type="number" value={statusConfig.crash_12v12} onChange={e => setStatusConfig({...statusConfig, crash_12v12: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
-            <div><label className="text-xs text-gray-600">מרחק מהשיא</label><input type="number" value={statusConfig.crash_peak} onChange={e => setStatusConfig({...statusConfig, crash_peak: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
-            <div><label className="text-xs text-gray-600">חודשי ירידה</label><input type="number" value={statusConfig.crash_months} onChange={e => setStatusConfig({...statusConfig, crash_months: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
+          <h4 className="font-bold text-amber-700 mb-3">📈 סף התאוששות</h4>
+          <p className="text-xs text-gray-600 mb-3">תג "התאוששות" יופיע כאשר 3v3 או 2v2 גדול מהסף הזה (והשנתי שלילי)</p>
+          <div>
+            <label className="text-xs text-gray-600">אחוז מינימום להתאוששות</label>
+            <input type="number" value={config.recovery_threshold} onChange={e => setConfig({...config, recovery_threshold: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg mt-1"/>
           </div>
         </div>
       </div>
       
-      <button onClick={handleSave} className={'mt-6 px-6 py-2 rounded-xl font-medium transition-all ' + (saved ? 'bg-emerald-500 text-white' : 'bg-blue-500 text-white hover:bg-blue-600')}>
-        {saved ? <span className="flex items-center gap-2"><Check size={16}/>נשמר!</span> : 'שמור הגדרות'}
-      </button>
+      <div className="flex gap-3 mt-6">
+        <button onClick={handleSave} className={'px-6 py-2 rounded-xl font-medium transition-all ' + (saved ? 'bg-emerald-500 text-white' : 'bg-blue-500 text-white hover:bg-blue-600')}>
+          {saved ? <span className="flex items-center gap-2"><Check size={16}/>נשמר! מרענן...</span> : 'שמור הגדרות'}
+        </button>
+        <button onClick={handleReset} className="px-6 py-2 rounded-xl font-medium bg-gray-200 hover:bg-gray-300">
+          איפוס לברירת מחדל
+        </button>
+      </div>
     </div>
     
     <div className="bg-white rounded-2xl shadow-lg p-6 border">
@@ -638,9 +646,35 @@ const SettingsPage = () => {
         <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-blue-600">{STORES.length}</p><p className="text-xs text-gray-500">חנויות</p></div>
         <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-purple-600">{PRODUCTS.length}</p><p className="text-xs text-gray-500">מוצרים</p></div>
         <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-emerald-600">{STORES.filter(s => !s.is_inactive).length}</p><p className="text-xs text-gray-500">חנויות פעילות</p></div>
-        <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-gray-600">v5.0</p><p className="text-xs text-gray-500">גרסה</p></div>
+        <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-gray-600">v6.0</p><p className="text-xs text-gray-500">גרסה</p></div>
       </div>
       <p className="text-xs text-gray-400 text-center mt-4">עדכון אחרון: ינואר 2026 | נתונים: ינו 2024 - דצמ 2025</p>
+    </div>
+    
+    <div className="bg-white rounded-2xl shadow-lg p-6 border">
+      <h3 className="text-lg font-bold mb-4">📊 הסבר סטטוסים</h3>
+      <div className="space-y-3 text-sm">
+        <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-lg">
+          <Badge status="צמיחה" sm />
+          <span>שנתי חיובי + מגמה חיובית</span>
+        </div>
+        <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
+          <Badge status="יציב" sm />
+          <span>שינוי קטן בטווח -10% עד +10%</span>
+        </div>
+        <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-lg">
+          <Badge status="התאוששות" sm />
+          <span>שנתי שלילי אבל 3 חודשים / 2 חודשים חיובי (מעל {config.recovery_threshold}%)</span>
+        </div>
+        <div className="flex items-center gap-3 p-3 bg-orange-50 rounded-lg">
+          <Badge status="ירידה מתונה" sm />
+          <span>ירידה שנתית בין -10% ל -30%</span>
+        </div>
+        <div className="flex items-center gap-3 p-3 bg-red-50 rounded-lg">
+          <Badge status="התרסקות" sm />
+          <span>ירידה שנתית מעל 30% או מרחק גדול מהשיא</span>
+        </div>
+      </div>
     </div>
   </div>);
 };
