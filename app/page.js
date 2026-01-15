@@ -65,6 +65,67 @@ const getShortTermStatus = (shortTerm) => {
   if (shortTerm >= -10) return 'ירידה מתונה';
   return 'התרסקות';
 };
+
+// Auth helpers
+const DEFAULT_PASSWORD = 'baron148';
+const getPassword = () => { if (typeof window === 'undefined') return DEFAULT_PASSWORD; return localStorage.getItem('baron_password') || DEFAULT_PASSWORD; };
+const setPassword = (pwd) => { if (typeof window !== 'undefined') localStorage.setItem('baron_password', pwd); };
+const isLoggedIn = () => { if (typeof window === 'undefined') return false; return localStorage.getItem('baron_logged_in') === 'true'; };
+const setLoggedIn = (val) => { if (typeof window !== 'undefined') localStorage.setItem('baron_logged_in', val ? 'true' : 'false'); };
+
+// Exclusions helpers
+const getExclusions = () => { if (typeof window === 'undefined') return { stores: [], products: [] }; try { return JSON.parse(localStorage.getItem('baron_exclusions') || '{"stores":[],"products":[]}'); } catch { return { stores: [], products: [] }; } };
+const setExclusions = (exc) => { if (typeof window !== 'undefined') localStorage.setItem('baron_exclusions', JSON.stringify(exc)); };
+
+// Login Screen Component
+const LoginScreen = ({ onLogin }) => {
+  const [password, setPasswordInput] = useState('');
+  const [error, setError] = useState(false);
+  
+  const handleLogin = () => {
+    if (password === getPassword()) {
+      setLoggedIn(true);
+      onLogin();
+    } else {
+      setError(true);
+      setTimeout(() => setError(false), 2000);
+    }
+  };
+  
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center p-4" dir="rtl">
+      <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+        <div className="text-center mb-8">
+          <img src="/baron-logo.png" alt="ברון" className="h-16 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-gray-800">ברוכים הבאים</h1>
+          <p className="text-gray-500 mt-2">מערכת ניתוח מכירות</p>
+        </div>
+        
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">שם משתמש</label>
+            <input type="text" value="מנהל" disabled className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-600" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">סיסמא</label>
+            <input 
+              type="password" 
+              value={password} 
+              onChange={e => setPasswordInput(e.target.value)}
+              onKeyPress={e => e.key === 'Enter' && handleLogin()}
+              placeholder="הזן סיסמא"
+              className={'w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ' + (error ? 'border-red-500 bg-red-50' : 'border-gray-200')}
+            />
+            {error && <p className="text-red-500 text-sm mt-1">סיסמא שגויה</p>}
+          </div>
+          <button onClick={handleLogin} className="w-full py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-medium rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg">
+            כניסה למערכת
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 const fmt = n => n != null ? new Intl.NumberFormat('he-IL').format(Math.round(n)) : '-';
 const fmtPct = n => n != null ? (n > 0 ? '+' : '') + n.toFixed(1) + '%' : '-';
 const fmtMonth = m => { const s = String(m); return s.slice(4) + '/' + s.slice(2,4); };
@@ -691,15 +752,54 @@ const DEFAULT_CONFIG = { recovery_threshold: 10, growth_12v12: 10, growth_short:
 const getConfig = () => { if (typeof window === 'undefined') return DEFAULT_CONFIG; try { const saved = localStorage.getItem('baron_config'); return saved ? { ...DEFAULT_CONFIG, ...JSON.parse(saved) } : DEFAULT_CONFIG; } catch { return DEFAULT_CONFIG; } };
 const saveConfig = (config) => { if (typeof window !== 'undefined') localStorage.setItem('baron_config', JSON.stringify(config)); };
 
-const SettingsPage = () => {
+const SettingsPage = ({ onLogout }) => {
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [saved, setSaved] = useState(false);
+  const [oldPwd, setOldPwd] = useState('');
+  const [newPwd, setNewPwd] = useState('');
+  const [pwdMsg, setPwdMsg] = useState({ text: '', ok: false });
+  
   React.useEffect(() => { setConfig(getConfig()); }, []);
   const handleSave = () => { saveConfig(config); setSaved(true); setTimeout(() => { setSaved(false); window.location.reload(); }, 1000); };
   const handleReset = () => { setConfig(DEFAULT_CONFIG); saveConfig(DEFAULT_CONFIG); window.location.reload(); };
   
+  const handlePasswordChange = () => {
+    if (oldPwd !== getPassword()) {
+      setPwdMsg({ text: 'סיסמא נוכחית שגויה', ok: false });
+      return;
+    }
+    if (newPwd.length < 4) {
+      setPwdMsg({ text: 'סיסמא חדשה קצרה מדי (מינימום 4 תווים)', ok: false });
+      return;
+    }
+    setPassword(newPwd);
+    setPwdMsg({ text: 'סיסמא שונתה בהצלחה!', ok: true });
+    setOldPwd('');
+    setNewPwd('');
+    setTimeout(() => setPwdMsg({ text: '', ok: false }), 3000);
+  };
+  
   return (<div className="space-y-6">
     <h2 className="text-xl font-bold">הגדרות</h2>
+    
+    {/* Password Change */}
+    <div className="bg-white rounded-2xl shadow-lg p-6 border">
+      <h3 className="text-lg font-bold mb-4 flex items-center gap-2">🔐 שינוי סיסמא</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="text-xs text-gray-600 block mb-1">סיסמא נוכחית</label>
+          <input type="password" value={oldPwd} onChange={e => setOldPwd(e.target.value)} placeholder="הזן סיסמא נוכחית" className="w-full px-3 py-2 border rounded-lg" />
+        </div>
+        <div>
+          <label className="text-xs text-gray-600 block mb-1">סיסמא חדשה</label>
+          <input type="password" value={newPwd} onChange={e => setNewPwd(e.target.value)} placeholder="הזן סיסמא חדשה" className="w-full px-3 py-2 border rounded-lg" />
+        </div>
+      </div>
+      {pwdMsg.text && <p className={`text-sm mt-2 ${pwdMsg.ok ? 'text-emerald-600' : 'text-red-600'}`}>{pwdMsg.text}</p>}
+      <button onClick={handlePasswordChange} className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">שנה סיסמא</button>
+    </div>
+    
+    {/* Status Config */}
     <div className="bg-white rounded-2xl shadow-lg p-6 border">
       <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Settings size={20}/>הגדרות סטטוסים</h3>
       <p className="text-sm text-gray-500 mb-6">הגדר את הסיפים לחישוב סטטוס</p>
@@ -715,20 +815,25 @@ const SettingsPage = () => {
         <button onClick={handleReset} className="px-6 py-2 rounded-xl font-medium bg-gray-200 hover:bg-gray-300">איפוס</button>
       </div>
     </div>
-    <div className="bg-white rounded-2xl shadow-lg p-6 border">
-      <h3 className="text-lg font-bold mb-4">📤 העלאת קובץ נתונים</h3>
-      <p className="text-sm text-gray-500 mb-4">העלה קובץ Excel חדש לעדכון הנתונים</p>
-      <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-400 cursor-pointer transition-colors"><Download className="mx-auto text-gray-400 mb-3" size={32}/><p className="text-gray-600">גרור קובץ לכאן או לחץ לבחירה</p><p className="text-xs text-gray-400 mt-2">פורמט: Excel (.xlsx)</p></div>
-    </div>
+    
+    {/* System Info */}
     <div className="bg-white rounded-2xl shadow-lg p-6 border">
       <h3 className="text-lg font-bold mb-4">ℹ️ מידע על המערכת</h3>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
         <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-blue-600">{STORES_RAW.length}</p><p className="text-xs text-gray-500">חנויות</p></div>
         <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-purple-600">{PRODUCTS_RAW.length}</p><p className="text-xs text-gray-500">מוצרים</p></div>
         <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-emerald-600">{STORES_RAW.filter(s => !s.is_inactive).length}</p><p className="text-xs text-gray-500">חנויות פעילות</p></div>
-        <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-gray-600">v7.0</p><p className="text-xs text-gray-500">גרסה</p></div>
+        <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-gray-600">v7.3</p><p className="text-xs text-gray-500">גרסה</p></div>
       </div>
       <p className="text-xs text-gray-400 text-center mt-4">עדכון אחרון: ינואר 2026</p>
+    </div>
+    
+    {/* Logout */}
+    <div className="bg-white rounded-2xl shadow-lg p-6 border">
+      <button onClick={onLogout} className="w-full py-3 bg-red-500 text-white font-medium rounded-xl hover:bg-red-600 flex items-center justify-center gap-2">
+        <LogOut size={20} />
+        התנתק מהמערכת
+      </button>
     </div>
   </div>);
 };
@@ -740,17 +845,98 @@ const BaronLogo = () => (
   </div>
 );
 
+// Exclusion Search Component
+const ExclusionSearch = ({ type, items, excluded, onToggle }) => {
+  const [search, setSearch] = useState('');
+  const filtered = items.filter(i => i.name.toLowerCase().includes(search.toLowerCase())).slice(0, 20);
+  const isExcluded = (id) => excluded.includes(id);
+  
+  return (
+    <div className="space-y-2">
+      <div className="relative">
+        <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+        <input 
+          type="text" 
+          value={search} 
+          onChange={e => setSearch(e.target.value)} 
+          placeholder={type === 'stores' ? 'חפש חנות...' : 'חפש מוצר...'} 
+          className="w-full pr-10 pl-4 py-2 border rounded-lg text-sm"
+        />
+      </div>
+      {search && (
+        <div className="max-h-48 overflow-y-auto border rounded-lg">
+          {filtered.map(item => (
+            <div 
+              key={item.id} 
+              onClick={() => onToggle(item.id)}
+              className={'flex items-center justify-between p-2 hover:bg-gray-50 cursor-pointer ' + (isExcluded(item.id) ? 'bg-red-50' : '')}
+            >
+              <span className="text-sm">{item.name}</span>
+              {isExcluded(item.id) ? 
+                <span className="text-xs text-red-600 bg-red-100 px-2 py-0.5 rounded">מוחרג</span> : 
+                <span className="text-xs text-gray-400">לחץ להחרגה</span>
+              }
+            </div>
+          ))}
+        </div>
+      )}
+      {excluded.length > 0 && (
+        <div className="mt-2">
+          <p className="text-xs text-gray-500 mb-1">מוחרגים ({excluded.length}):</p>
+          <div className="flex flex-wrap gap-1">
+            {excluded.map(id => {
+              const item = items.find(i => i.id === id);
+              return item ? (
+                <span key={id} onClick={() => onToggle(id)} className="inline-flex items-center gap-1 bg-red-100 text-red-700 px-2 py-0.5 rounded text-xs cursor-pointer hover:bg-red-200">
+                  {item.name.slice(0, 15)}{item.name.length > 15 ? '...' : ''}
+                  <X size={12} />
+                </span>
+              ) : null;
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function App() {
+  const [loggedIn, setLoggedInState] = useState(false);
   const [tab, setTab] = useState('overview');
   const [store, setStore] = useState(null);
   const [product, setProduct] = useState(null);
   const [menu, setMenu] = useState(false);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
+  const [excludedStores, setExcludedStores] = useState([]);
+  const [excludedProducts, setExcludedProducts] = useState([]);
+  const [showExclusions, setShowExclusions] = useState(false);
   
-  useEffect(() => { setConfig(getConfig()); }, []);
+  useEffect(() => { 
+    setConfig(getConfig()); 
+    setLoggedInState(isLoggedIn());
+  }, []);
   
-  const STORES = useMemo(() => applyConfig(STORES_RAW, config), [config]);
-  const PRODUCTS = useMemo(() => applyConfig(PRODUCTS_RAW, config), [config]);
+  const handleLogin = () => setLoggedInState(true);
+  const handleLogout = () => { setLoggedIn(false); setLoggedInState(false); };
+  
+  const toggleExcludeStore = (id) => {
+    setExcludedStores(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+  const toggleExcludeProduct = (id) => {
+    setExcludedProducts(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+  const clearExclusions = () => { setExcludedStores([]); setExcludedProducts([]); };
+  
+  // Apply config and filter exclusions
+  const STORES = useMemo(() => {
+    const configured = applyConfig(STORES_RAW, config);
+    return configured.filter(s => !excludedStores.includes(s.id));
+  }, [config, excludedStores]);
+  
+  const PRODUCTS = useMemo(() => {
+    const configured = applyConfig(PRODUCTS_RAW, config);
+    return configured.filter(p => !excludedProducts.includes(p.id));
+  }, [config, excludedProducts]);
   
   const tabs = [
     { id: 'overview', l: 'סקירה', I: Home },
@@ -776,10 +962,17 @@ export default function App() {
       case 'alerts': return <Alerts stores={STORES} onSelect={setStore} />;
       case 'rankings': return <Rankings stores={STORES} onSelect={setStore} />;
       case 'inactive': return <Inactive stores={STORES} onSelect={setStore} />;
-      case 'settings': return <SettingsPage />;
+      case 'settings': return <SettingsPage onLogout={handleLogout} />;
       default: return <Overview stores={STORES} products={PRODUCTS} onNav={nav} />;
     }
   };
+  
+  // Show login screen if not logged in
+  if (!loggedIn) {
+    return <LoginScreen onLogin={handleLogin} />;
+  }
+  
+  const totalExclusions = excludedStores.length + excludedProducts.length;
   
   return (<div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50" dir="rtl">
     <header className="bg-white shadow-sm border-b sticky top-0 z-50 print:hidden">
@@ -788,12 +981,42 @@ export default function App() {
           <button onClick={() => setMenu(!menu)} className="lg:hidden p-2 hover:bg-gray-100 rounded-xl">{menu ? <X size={24}/> : <Menu size={24}/>}</button>
           <BaronLogo />
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          <button onClick={() => setShowExclusions(!showExclusions)} className={'relative p-2 rounded-xl transition-colors ' + (showExclusions ? 'bg-red-100 text-red-600' : 'hover:bg-gray-100 text-gray-600')}>
+            <Filter size={20} />
+            {totalExclusions > 0 && <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">{totalExclusions}</span>}
+          </button>
           <div className="hidden sm:flex items-center gap-2 text-sm text-gray-600"><User size={18}/><span>מנהל</span></div>
-          <button className="p-2 hover:bg-gray-100 rounded-xl text-gray-600"><LogOut size={20}/></button>
+          <button onClick={handleLogout} className="p-2 hover:bg-gray-100 rounded-xl text-gray-600"><LogOut size={20}/></button>
         </div>
       </div>
     </header>
+    
+    {/* Exclusions Panel */}
+    {showExclusions && (
+      <div className="bg-white border-b shadow-lg print:hidden">
+        <div className="max-w-7xl mx-auto p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold text-gray-800">🚫 החרגות זמניות</h3>
+            {totalExclusions > 0 && (
+              <button onClick={clearExclusions} className="text-sm text-red-600 hover:text-red-800">נקה הכל ({totalExclusions})</button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-2">🏪 חנויות</p>
+              <ExclusionSearch type="stores" items={applyConfig(STORES_RAW, config)} excluded={excludedStores} onToggle={toggleExcludeStore} />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-2">📦 מוצרים</p>
+              <ExclusionSearch type="products" items={applyConfig(PRODUCTS_RAW, config)} excluded={excludedProducts} onToggle={toggleExcludeProduct} />
+            </div>
+          </div>
+          <p className="text-xs text-gray-400 mt-3">* ההחרגות הן זמניות ומתאפסות בטעינה מחדש של הדף</p>
+        </div>
+      </div>
+    )}
+    
     <div className="flex">
       <aside className="hidden lg:block w-56 bg-white border-l fixed top-[60px] bottom-0 overflow-y-auto print:hidden">
         <nav className="p-4 space-y-1">{tabs.map(t => <button key={t.id} onClick={() => { setTab(t.id); setStore(null); setProduct(null); }} className={'w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ' + (tab === t.id ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600 hover:bg-gray-50')}><t.I size={20}/>{t.l}</button>)}</nav>
