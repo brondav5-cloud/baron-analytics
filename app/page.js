@@ -262,11 +262,15 @@ const Table = ({ data, cols, onRow, name = 'data', compact = false }) => {
       <div className="relative flex-1 min-w-48"><Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} /><input type="text" placeholder="חיפוש..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="w-full pr-10 pl-4 py-2 border rounded-xl text-sm" /></div>
       <button onClick={() => exportCSV(filtered, cols, name)} className="flex items-center gap-1 px-3 py-2 bg-emerald-500 text-white rounded-xl text-sm"><Download size={16}/>Excel</button>
     </div>
+    {/* Scroll arrows for mobile - outside the scroll container */}
     <div className="relative">
-      {/* Scroll arrows for mobile */}
-      <button onClick={scrollRight} className="lg:hidden absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-white/90 shadow-lg rounded-r-lg p-2 hover:bg-gray-100 border border-l-0"><ChevronLeft size={20} className="text-gray-600" /></button>
-      <button onClick={scrollLeft} className="lg:hidden absolute right-12 top-1/2 -translate-y-1/2 z-20 bg-white/90 shadow-lg rounded-l-lg p-2 hover:bg-gray-100 border border-r-0"><ChevronRight size={20} className="text-gray-600" /></button>
-      <div ref={scrollRef} className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100" style={{ scrollbarWidth: 'thin' }}>
+      <button onClick={scrollLeft} className="lg:hidden absolute right-1 top-1/2 -translate-y-1/2 z-30 bg-blue-500 shadow-lg rounded-full p-2 hover:bg-blue-600">
+        <ChevronRight size={24} className="text-white" />
+      </button>
+      <button onClick={scrollRight} className="lg:hidden absolute left-1 top-1/2 -translate-y-1/2 z-30 bg-blue-500 shadow-lg rounded-full p-2 hover:bg-blue-600">
+        <ChevronLeft size={24} className="text-white" />
+      </button>
+      <div ref={scrollRef} className="overflow-x-auto" style={{ scrollbarWidth: 'thin' }}>
         <table className="w-full min-w-max">
           <thead className="bg-gray-50">
             <tr>{cols.map((c, idx) => <th key={c.k} onClick={() => setSort(p => ({ k: c.k, d: p.k === c.k && p.d === 'desc' ? 'asc' : 'desc' }))} className={`px-3 py-3 text-right text-xs font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 whitespace-pre-line ${idx === 0 ? 'sticky right-0 bg-gray-50 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]' : ''}`}><span className="flex items-center gap-1">{c.t && <Tip text={c.t} />}{c.l}{sort.k === c.k && <span className="text-blue-500 mr-1">{sort.d === 'asc' ? '↑' : '↓'}</span>}</span></th>)}</tr>
@@ -1166,7 +1170,7 @@ export default function App() {
         <nav className="p-4 space-y-1">{tabs.map(t => <button key={t.id} onClick={() => { setTab(t.id); setStore(null); setProduct(null); }} className={'w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ' + (tab === t.id ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600 hover:bg-gray-50')}><t.I size={20}/>{t.l}</button>)}</nav>
       </aside>
       {menu && <div className="lg:hidden fixed inset-0 z-40 bg-black/50 print:hidden" onClick={() => setMenu(false)}><div className="w-64 bg-white h-full" onClick={e => e.stopPropagation()}><nav className="p-4 space-y-1 mt-16">{tabs.map(t => <button key={t.id} onClick={() => { setTab(t.id); setStore(null); setProduct(null); setMenu(false); }} className={'w-full flex items-center gap-3 px-4 py-3 rounded-xl ' + (tab === t.id ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600 hover:bg-gray-50')}><t.I size={20}/>{t.l}</button>)}</nav></div></div>}
-      <main className="flex-1 p-4 lg:p-6 lg:mr-56 max-w-7xl mx-auto w-full">{content()}</main>
+      <main className="flex-1 p-4 lg:p-6 lg:mr-56 w-full">{content()}</main>
     </div>
   </div>);
 }
