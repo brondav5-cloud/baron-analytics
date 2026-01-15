@@ -43,6 +43,8 @@ const METRIC_TIPS = {
   '2v2': 'השוואת ספט-אוק מול נוב-דצמ 2025',
   'peak': 'מרחק מהשיא = כמות דצמבר 2025 מול ממוצע 4 החודשים הגבוהים ביותר',
   'returns': 'אחוז החזרות מהאספקה - השוואת חצי שנה ראשון מול שני',
+  'long_term': 'מדד טווח ארוך = הערך הנמוך ביותר מבין: שנתי (12v12), חצי שנה (6v6), רבעון (3v3)',
+  'short_term': 'מדד טווח קצר = 2 חודשים אחרונים (נוב-דצמ) מול 2 שלפניהם (ספט-אוק). ירוק = חיובי או מקסימום ירידה אחת בין החודשים',
 };
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#f97316', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
 const fmt = n => n != null ? new Intl.NumberFormat('he-IL').format(Math.round(n)) : '-';
@@ -67,6 +69,27 @@ const StatusBadge = ({ status, recovery, sm }) => {
           <TrendingUp size={10} />התאוששות
         </span>
       )}
+    </div>
+  );
+};
+
+const LongTermCell = ({ value }) => {
+  const color = value >= 10 ? 'text-emerald-600' : value >= 0 ? 'text-emerald-500' : value >= -10 ? 'text-orange-500' : 'text-red-600';
+  const bg = value >= 10 ? 'bg-emerald-50' : value >= 0 ? 'bg-emerald-50' : value >= -10 ? 'bg-orange-50' : 'bg-red-50';
+  return (
+    <div className={`text-center px-2 py-1 rounded-lg ${bg}`}>
+      <span className={`font-bold ${color}`}>{fmtPct(value)}</span>
+    </div>
+  );
+};
+
+const ShortTermCell = ({ value, ok }) => {
+  const isPositive = value >= 0 || ok;
+  const color = isPositive ? 'text-emerald-600' : 'text-red-600';
+  const bg = isPositive ? 'bg-emerald-50' : 'bg-red-50';
+  return (
+    <div className={`text-center px-2 py-1 rounded-lg ${bg}`}>
+      <span className={`font-bold ${color}`}>{fmtPct(value)}</span>
     </div>
   );
 };
@@ -273,14 +296,16 @@ const StoresList = ({ stores, onSelect }) => {
   
   const cols = [
     { k: 'name', l: 'חנות', r: (v, r) => <div><p className="font-medium">{v}</p><p className="text-xs text-gray-500">{r.city}</p></div> },
-    { k: 'metric_12v12', l: 'שנתי\nינו-דצמ 24→25', t: METRIC_TIPS['12v12'], r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
+    { k: 'metric_long_term', l: 'טווח ארוך', t: METRIC_TIPS['long_term'], r: (v, r) => <LongTermCell value={v} /> },
+    { k: 'metric_short_term', l: 'טווח קצר', t: METRIC_TIPS['short_term'], r: (v, r) => <ShortTermCell value={v} ok={r.short_term_ok} /> },
+    { k: 'metric_12v12', l: 'שנתי\n24→25', t: METRIC_TIPS['12v12'], r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
     { k: 'metric_6v6', l: '6 חודשים\nינו-יונ→יול-דצמ', t: METRIC_TIPS['6v6'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev6} to={r.qty_last6} /> },
     { k: 'metric_3v3', l: '3 חודשים\nאוק-דצמ 24→25', t: METRIC_TIPS['3v3'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev3} to={r.qty_last3} /> },
     { k: 'metric_2v2', l: '2 חודשים\nספט-אוק→נוב-דצמ', t: METRIC_TIPS['2v2'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev2} to={r.qty_last2} /> },
     { k: 'metric_peak_distance', l: 'מרחק מהשיא', t: METRIC_TIPS['peak'], r: (v, r) => <PeakCell pct={v} peak={r.peak_value} current={r.current_value} /> },
-    { k: 'returns_pct_last6', l: 'חזרות %\nינו-יונ→יול-דצמ', t: METRIC_TIPS['returns'], r: (v, r) => <ReturnsCell pctL6={v} pctP6={r.returns_pct_prev6} change={r.returns_change} /> },
+    { k: 'returns_pct_last6', l: 'חזרות %', t: METRIC_TIPS['returns'], r: (v, r) => <ReturnsCell pctL6={v} pctP6={r.returns_pct_prev6} change={r.returns_change} /> },
     { k: 'status', l: 'סטטוס', r: (v, r) => <StatusBadge status={v} recovery={r.is_recovering} /> },
-    { k: 'qty_total', l: 'כמות\nכוללת', r: v => <span className="font-bold">{fmt(v)}</span> },
+    { k: 'qty_total', l: 'כמות', r: v => <span className="font-bold">{fmt(v)}</span> },
   ];
   
   return (<div className="space-y-4">
@@ -317,13 +342,15 @@ const StoreDetail = ({ store, onBack }) => {
   
   const prodCols = [
     { k: 'name', l: 'מוצר', r: (v, r) => <div><p className="font-medium">{v}</p><p className="text-xs text-gray-500">{r.category}</p></div> },
+    { k: 'metric_long_term', l: 'טווח ארוך', t: METRIC_TIPS['long_term'], r: (v, r) => <LongTermCell value={v} /> },
+    { k: 'metric_short_term', l: 'טווח קצר', t: METRIC_TIPS['short_term'], r: (v, r) => <ShortTermCell value={v} ok={r.short_term_ok} /> },
     { k: 'metric_12v12', l: 'שנתי\n24→25', t: METRIC_TIPS['12v12'], r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
     { k: 'metric_6v6', l: '6 חודשים', t: METRIC_TIPS['6v6'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev6} to={r.qty_last6} /> },
     { k: 'metric_3v3', l: '3 חודשים', t: METRIC_TIPS['3v3'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev3} to={r.qty_last3} /> },
     { k: 'metric_2v2', l: '2 חודשים', t: METRIC_TIPS['2v2'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev2} to={r.qty_last2} /> },
     { k: 'metric_peak_distance', l: 'מרחק מהשיא', t: METRIC_TIPS['peak'], r: (v, r) => <PeakCell pct={v} peak={r.peak_value} current={r.current_value} /> },
     { k: 'returns_pct_last6', l: 'חזרות %', t: METRIC_TIPS['returns'], r: (v, r) => <ReturnsCell pctL6={v} pctP6={r.returns_pct_prev6} change={r.returns_change} /> },
-    { k: 'status', l: 'סטטוס', r: v => <Badge status={v} sm /> },
+    { k: 'status', l: 'סטטוס', r: (v, r) => <StatusBadge status={v} recovery={r.is_recovering} sm /> },
     { k: 'qty_total', l: 'כמות', r: v => <span className="font-bold">{fmt(v)}</span> },
   ];
   
@@ -371,12 +398,14 @@ const ProductsList = ({ products, onSelect }) => {
   
   const cols = [
     { k: 'name', l: 'מוצר', r: (v, r) => <div><p className="font-medium">{v}</p><p className="text-xs text-gray-500">{r.category}</p></div> },
-    { k: 'metric_12v12', l: 'שנתי\nינו-דצמ 24→25', t: METRIC_TIPS['12v12'], r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
+    { k: 'metric_long_term', l: 'טווח ארוך', t: METRIC_TIPS['long_term'], r: (v, r) => <LongTermCell value={v} /> },
+    { k: 'metric_short_term', l: 'טווח קצר', t: METRIC_TIPS['short_term'], r: (v, r) => <ShortTermCell value={v} ok={r.short_term_ok} /> },
+    { k: 'metric_12v12', l: 'שנתי\n24→25', t: METRIC_TIPS['12v12'], r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
     { k: 'metric_6v6', l: '6 חודשים\nינו-יונ→יול-דצמ', t: METRIC_TIPS['6v6'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev6} to={r.qty_last6} /> },
     { k: 'metric_3v3', l: '3 חודשים\nאוק-דצמ 24→25', t: METRIC_TIPS['3v3'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev3} to={r.qty_last3} /> },
     { k: 'metric_2v2', l: '2 חודשים\nספט-אוק→נוב-דצמ', t: METRIC_TIPS['2v2'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev2} to={r.qty_last2} /> },
     { k: 'metric_peak_distance', l: 'מרחק מהשיא', t: METRIC_TIPS['peak'], r: (v, r) => <PeakCell pct={v} peak={r.peak_value} current={r.current_value} /> },
-    { k: 'returns_pct_last6', l: 'חזרות %\nינו-יונ→יול-דצמ', t: METRIC_TIPS['returns'], r: (v, r) => <ReturnsCell pctL6={v} pctP6={r.returns_pct_prev6} change={r.returns_change} /> },
+    { k: 'returns_pct_last6', l: 'חזרות %', t: METRIC_TIPS['returns'], r: (v, r) => <ReturnsCell pctL6={v} pctP6={r.returns_pct_prev6} change={r.returns_change} /> },
     { k: 'status', l: 'סטטוס', r: (v, r) => <StatusBadge status={v} recovery={r.is_recovering} /> },
     { k: 'total_sales', l: 'מחזור', r: v => <span className="font-bold text-gray-600">₪{fmt(v)}</span> },
     { k: 'qty_total', l: 'כמות', r: v => <span className="font-bold">{fmt(v)}</span> },
@@ -406,13 +435,15 @@ const ProductDetail = ({ product, onBack }) => {
   
   const storeCols = [
     { k: 'name', l: 'חנות', r: (v, r) => <div><p className="font-medium">{v}</p><p className="text-xs text-gray-500">{r.city}</p></div> },
+    { k: 'metric_long_term', l: 'טווח ארוך', t: METRIC_TIPS['long_term'], r: (v, r) => <LongTermCell value={v} /> },
+    { k: 'metric_short_term', l: 'טווח קצר', t: METRIC_TIPS['short_term'], r: (v, r) => <ShortTermCell value={v} ok={r.short_term_ok} /> },
     { k: 'metric_12v12', l: 'שנתי\n24→25', t: METRIC_TIPS['12v12'], r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
     { k: 'metric_6v6', l: '6 חודשים', t: METRIC_TIPS['6v6'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev6} to={r.qty_last6} /> },
     { k: 'metric_3v3', l: '3 חודשים', t: METRIC_TIPS['3v3'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev3} to={r.qty_last3} /> },
     { k: 'metric_2v2', l: '2 חודשים', t: METRIC_TIPS['2v2'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev2} to={r.qty_last2} /> },
     { k: 'metric_peak_distance', l: 'מרחק מהשיא', t: METRIC_TIPS['peak'], r: (v, r) => <PeakCell pct={v} peak={r.peak_value} current={r.current_value} /> },
     { k: 'returns_pct_last6', l: 'חזרות %', t: METRIC_TIPS['returns'], r: (v, r) => <ReturnsCell pctL6={v} pctP6={r.returns_pct_prev6} change={r.returns_change} /> },
-    { k: 'status', l: 'סטטוס', r: v => <Badge status={v} sm /> },
+    { k: 'status', l: 'סטטוס', r: (v, r) => <StatusBadge status={v} recovery={r.is_recovering} sm /> },
     { k: 'qty_total', l: 'כמות', r: v => <span className="font-bold">{fmt(v)}</span> },
   ];
   
@@ -561,8 +592,16 @@ const Trends = ({ stores, products }) => {
 };
 
 const DEFAULT_CONFIG = {
-  recovery_threshold: 10, // 3v3 or 2v2 minimum for recovery tag
-  min_qty_filter: 0,
+  recovery_threshold: 10,
+  growth_12v12: 10,
+  growth_short: 0,
+  stable_min: -10,
+  stable_max: 10,
+  decline_12v12: -10,
+  decline_months: 3,
+  crash_12v12: -30,
+  crash_peak: -50,
+  crash_months: 6,
 };
 
 const getConfig = () => {
@@ -583,7 +622,6 @@ const SettingsPage = () => {
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [saved, setSaved] = useState(false);
   
-  // Load from localStorage on mount
   React.useEffect(() => {
     setConfig(getConfig());
   }, []);
@@ -593,7 +631,7 @@ const SettingsPage = () => {
     setSaved(true);
     setTimeout(() => {
       setSaved(false);
-      window.location.reload(); // Reload to apply changes
+      window.location.reload();
     }, 1000);
   };
   
@@ -607,15 +645,53 @@ const SettingsPage = () => {
     <h2 className="text-xl font-bold">הגדרות</h2>
     
     <div className="bg-white rounded-2xl shadow-lg p-6 border">
-      <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Settings size={20}/>הגדרות תצוגה</h3>
+      <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Settings size={20}/>הגדרות סטטוסים</h3>
+      <p className="text-sm text-gray-500 mb-6">הגדר את הסיפים לחישוב סטטוס כל חנות/מוצר</p>
       
-      <div className="space-y-6">
+      <div className="space-y-4">
+        <div className="p-4 bg-emerald-50 rounded-xl">
+          <h4 className="font-bold text-emerald-700 mb-3">🚀 צמיחה</h4>
+          <p className="text-xs text-gray-600 mb-3">טווח ארוך ≥ X% AND טווח קצר ≥ Y%</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="text-xs text-gray-600">טווח ארוך מינימום %</label><input type="number" value={config.growth_12v12} onChange={e => setConfig({...config, growth_12v12: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
+            <div><label className="text-xs text-gray-600">טווח קצר מינימום %</label><input type="number" value={config.growth_short} onChange={e => setConfig({...config, growth_short: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
+          </div>
+        </div>
+        
         <div className="p-4 bg-amber-50 rounded-xl">
-          <h4 className="font-bold text-amber-700 mb-3">📈 סף התאוששות</h4>
-          <p className="text-xs text-gray-600 mb-3">תג "התאוששות" יופיע כאשר 3v3 או 2v2 גדול מהסף הזה (והשנתי שלילי)</p>
+          <h4 className="font-bold text-amber-700 mb-3">📈 התאוששות (תג נוסף)</h4>
+          <p className="text-xs text-gray-600 mb-3">יופיע כתג נוסף כאשר טווח ארוך שלילי אבל טווח קצר ≥ X%</p>
           <div>
-            <label className="text-xs text-gray-600">אחוז מינימום להתאוששות</label>
-            <input type="number" value={config.recovery_threshold} onChange={e => setConfig({...config, recovery_threshold: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg mt-1"/>
+            <label className="text-xs text-gray-600">טווח קצר מינימום %</label>
+            <input type="number" value={config.recovery_threshold} onChange={e => setConfig({...config, recovery_threshold: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/>
+          </div>
+        </div>
+        
+        <div className="p-4 bg-blue-50 rounded-xl">
+          <h4 className="font-bold text-blue-700 mb-3">⚖️ יציב</h4>
+          <p className="text-xs text-gray-600 mb-3">X% ≤ טווח ארוך ≤ Y%</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="text-xs text-gray-600">טווח ארוך מינימום %</label><input type="number" value={config.stable_min} onChange={e => setConfig({...config, stable_min: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
+            <div><label className="text-xs text-gray-600">טווח ארוך מקסימום %</label><input type="number" value={config.stable_max} onChange={e => setConfig({...config, stable_max: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
+          </div>
+        </div>
+        
+        <div className="p-4 bg-orange-50 rounded-xl">
+          <h4 className="font-bold text-orange-700 mb-3">📉 ירידה מתונה</h4>
+          <p className="text-xs text-gray-600 mb-3">טווח ארוך &lt; X% OR ירידה רצופה ≥ Y חודשים</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="text-xs text-gray-600">טווח ארוך מקסימום %</label><input type="number" value={config.decline_12v12} onChange={e => setConfig({...config, decline_12v12: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
+            <div><label className="text-xs text-gray-600">חודשי ירידה רצופה</label><input type="number" value={config.decline_months} onChange={e => setConfig({...config, decline_months: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
+          </div>
+        </div>
+        
+        <div className="p-4 bg-red-50 rounded-xl">
+          <h4 className="font-bold text-red-700 mb-3">💥 התרסקות</h4>
+          <p className="text-xs text-gray-600 mb-3">טווח ארוך &lt; X% OR מרחק מהשיא &lt; Y% OR ירידה ≥ Z חודשים</p>
+          <div className="grid grid-cols-3 gap-3">
+            <div><label className="text-xs text-gray-600">טווח ארוך מקסימום %</label><input type="number" value={config.crash_12v12} onChange={e => setConfig({...config, crash_12v12: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
+            <div><label className="text-xs text-gray-600">מרחק מהשיא %</label><input type="number" value={config.crash_peak} onChange={e => setConfig({...config, crash_peak: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
+            <div><label className="text-xs text-gray-600">חודשי ירידה</label><input type="number" value={config.crash_months} onChange={e => setConfig({...config, crash_months: Number(e.target.value)})} className="w-full px-3 py-2 border rounded-lg"/></div>
           </div>
         </div>
       </div>
