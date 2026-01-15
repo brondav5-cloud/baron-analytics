@@ -57,6 +57,14 @@ const METRIC_TIPS = {
 };
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#f97316', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
+
+// Helper to calculate short-term status
+const getShortTermStatus = (shortTerm) => {
+  if (shortTerm >= 10) return 'צמיחה';
+  if (shortTerm >= 0) return 'יציב';
+  if (shortTerm >= -10) return 'ירידה מתונה';
+  return 'התרסקות';
+};
 const fmt = n => n != null ? new Intl.NumberFormat('he-IL').format(Math.round(n)) : '-';
 const fmtPct = n => n != null ? (n > 0 ? '+' : '') + n.toFixed(1) + '%' : '-';
 const fmtMonth = m => { const s = String(m); return s.slice(4) + '/' + s.slice(2,4); };
@@ -243,7 +251,8 @@ const StoresList = ({ stores, onSelect }) => {
   const [networks, setNetworks] = useState([]);
   const [drivers, setDrivers] = useState([]);
   const [agents, setAgents] = useState([]);
-  const [statuses, setStatuses] = useState([]);
+  const [statusesLong, setStatusesLong] = useState([]);
+  const [statusesShort, setStatusesShort] = useState([]);
   const [minQty, setMinQty] = useState(0);
   const [showF, setShowF] = useState(false);
   
@@ -252,10 +261,11 @@ const StoresList = ({ stores, onSelect }) => {
     if (networks.length && !networks.includes(s.network)) return false;
     if (drivers.length && !drivers.includes(s.driver)) return false;
     if (agents.length && !agents.includes(s.agent)) return false;
-    if (statuses.length && !statuses.includes(s.status)) return false;
+    if (statusesLong.length && !statusesLong.includes(s.status)) return false;
+    if (statusesShort.length && !statusesShort.includes(getShortTermStatus(s.metric_short_term))) return false;
     if (minQty > 0 && (s.qty_2025 || 0) < minQty) return false;
     return true;
-  }), [stores, cities, networks, drivers, agents, statuses, minQty]);
+  }), [stores, cities, networks, drivers, agents, statusesLong, statusesShort, minQty]);
   
   const cols = [
     { k: 'name', l: 'חנות', r: (v, r) => <div><p className="font-medium">{v}</p><p className="text-xs text-gray-500">{r.city}</p></div> },
@@ -280,12 +290,15 @@ const StoresList = ({ stores, onSelect }) => {
       </div>
     </div>
     {showF && <div className="bg-white rounded-xl shadow p-4 print:hidden">
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
         <MultiSelect label="עיר" opts={FILTERS.cities || []} selected={cities} onChange={setCities} />
         <MultiSelect label="רשת" opts={FILTERS.networks || []} selected={networks} onChange={setNetworks} />
         <MultiSelect label="נהג" opts={FILTERS.drivers || []} selected={drivers} onChange={setDrivers} />
         <MultiSelect label="סוכן" opts={FILTERS.agents || []} selected={agents} onChange={setAgents} />
-        <MultiSelect label="סטטוס" opts={['צמיחה','יציב','התאוששות','ירידה מתונה','התרסקות']} selected={statuses} onChange={setStatuses} />
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <MultiSelect label="סטטוס טווח ארוך" opts={['צמיחה','יציב','התאוששות','ירידה מתונה','התרסקות']} selected={statusesLong} onChange={setStatusesLong} />
+        <MultiSelect label="סטטוס טווח קצר" opts={['צמיחה','יציב','ירידה מתונה','התרסקות']} selected={statusesShort} onChange={setStatusesShort} />
         <div><label className="text-xs text-gray-600 block mb-1">מינימום פריטים</label><input type="number" value={minQty || ''} onChange={e => setMinQty(Number(e.target.value) || 0)} placeholder="0" className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" /></div>
       </div>
     </div>}
@@ -528,15 +541,17 @@ const StoreDetail = ({ store, onBack, allStores }) => {
 // Fixed ProductsList with proper filter alignment
 const ProductsList = ({ products, onSelect }) => {
   const [cats, setCats] = useState([]);
-  const [statuses, setStatuses] = useState([]);
+  const [statusesLong, setStatusesLong] = useState([]);
+  const [statusesShort, setStatusesShort] = useState([]);
   const [minQty, setMinQty] = useState(0);
   
   const filtered = useMemo(() => products.filter(p => { 
     if (cats.length && !cats.includes(p.category)) return false; 
-    if (statuses.length && !statuses.includes(p.status)) return false;
+    if (statusesLong.length && !statusesLong.includes(p.status)) return false;
+    if (statusesShort.length && !statusesShort.includes(getShortTermStatus(p.metric_short_term))) return false;
     if (minQty > 0 && (p.qty_2025 || 0) < minQty) return false;
     return true; 
-  }), [products, cats, statuses, minQty]);
+  }), [products, cats, statusesLong, statusesShort, minQty]);
   
   const cols = [
     { k: 'name', l: 'מוצר', r: (v, r) => <div><p className="font-medium">{v}</p><p className="text-xs text-gray-500">{r.category}</p></div> },
@@ -560,7 +575,8 @@ const ProductsList = ({ products, onSelect }) => {
     </div>
     <div className="flex flex-wrap gap-3 items-center print:hidden">
       <MultiSelect opts={FILTERS.categories || []} selected={cats} onChange={setCats} placeholder="קטגוריה" />
-      <MultiSelect opts={['צמיחה','יציב','התאוששות','ירידה מתונה','התרסקות']} selected={statuses} onChange={setStatuses} placeholder="סטטוס" />
+      <MultiSelect opts={['צמיחה','יציב','התאוששות','ירידה מתונה','התרסקות']} selected={statusesLong} onChange={setStatusesLong} placeholder="סטטוס ארוך" />
+      <MultiSelect opts={['צמיחה','יציב','ירידה מתונה','התרסקות']} selected={statusesShort} onChange={setStatusesShort} placeholder="סטטוס קצר" />
       <input type="number" value={minQty || ''} onChange={e => setMinQty(Number(e.target.value) || 0)} placeholder="מינ׳ 2025" className="w-32 px-3 py-2 border border-gray-200 rounded-xl text-sm" />
     </div>
     <Table data={filtered} cols={cols} onRow={onSelect} name="products" />
