@@ -4,7 +4,7 @@ export const metadata = {
   title: 'Baron Analytics',
   description: 'דשבורד ניהולי - ברון',
   manifest: '/manifest.json',
-  themeColor: '#3b82f6',
+  themeColor: '#6B4423',
 }
 
 export default function RootLayout({ children }) {
