@@ -2868,7 +2868,7 @@ export default function App() {
               <p className="text-sm font-medium text-gray-700">🏪 חנויות</p>
               <ExclusionSearchAdvanced 
                 type="stores" 
-                items={applyConfig(STORES_RAW, config)} 
+                items={applyConfig(STORES_RAW, rulesConfig)} 
                 excludedTemp={excludedStores}
                 excludedPerm={permanentExcludedStores}
                 onToggleTemp={(id) => toggleExcludeStore(id, false)}
@@ -2880,7 +2880,7 @@ export default function App() {
               <p className="text-sm font-medium text-gray-700">📦 מוצרים</p>
               <ExclusionSearchAdvanced 
                 type="products" 
-                items={applyConfig(PRODUCTS_RAW, config)} 
+                items={applyConfig(PRODUCTS_RAW, rulesConfig)} 
                 excludedTemp={excludedProducts}
                 excludedPerm={permanentExcludedProducts}
                 onToggleTemp={(id) => toggleExcludeProduct(id, false)}
