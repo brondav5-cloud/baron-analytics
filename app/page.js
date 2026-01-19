@@ -625,158 +625,6 @@ const MetricCell = ({ pct, from, to }) => (<div className="text-center"><span cl
 const ReturnsCell = ({ pctL6, pctP6, change }) => (<div className="text-center"><span className="text-sm">{(pctP6 || 0).toFixed(1)}%→{(pctL6 || 0).toFixed(1)}%</span><p className={`text-xs font-bold ${change > 0 ? 'text-red-500' : 'text-emerald-500'}`}>{change > 0 ? '+' : ''}{(change || 0).toFixed(1)}%</p></div>);
 const PeakCell = ({ pct, peak, current }) => (<div className="text-center"><span className={`font-bold ${pct >= -20 ? 'text-emerald-600' : pct >= -40 ? 'text-orange-500' : 'text-red-600'}`}>{fmtPct(pct)}</span><p className="text-xs text-gray-400">שיא(4): {fmt(peak)} | דצמ: {fmt(current)}</p></div>);
 
-// ============= MONTHLY SALES CHART COMPONENT =============
-const MONTH_NAMES_SHORT = {
-  '01': 'ינו', '02': 'פבר', '03': 'מרץ', '04': 'אפר', 
-  '05': 'מאי', '06': 'יונ', '07': 'יול', '08': 'אוג',
-  '09': 'ספט', '10': 'אוק', '11': 'נוב', '12': 'דצמ'
-};
-
-const MonthlySalesChart = ({ data, title = "מכירות חודשיות 2025" }) => {
-  // data יכול להיות: 
-  // 1. אובייקט monthly_qty מחנות/מוצר בודד
-  // 2. מערך של חנויות/מוצרים לסיכום כללי
-  
-  const chartData = useMemo(() => {
-    // חודשי 2025
-    const months2025 = ['202501', '202502', '202503', '202504', '202505', '202506', 
-                        '202507', '202508', '202509', '202510', '202511', '202512'];
-    
-    // אם זה מערך של חנויות/מוצרים - סכום את הכל
-    if (Array.isArray(data)) {
-      return months2025.map(month => {
-        let totalQty = 0;
-        let totalSales = 0;
-        data.forEach(item => {
-          if (item.monthly_qty && item.monthly_qty[month]) {
-            totalQty += item.monthly_qty[month];
-          }
-          if (item.monthly_sales && item.monthly_sales[month]) {
-            totalSales += item.monthly_sales[month];
-          }
-        });
-        // אם אין נתוני מכירות, נעריך לפי ממוצע מחיר של 7.5₪ לפריט
-        if (totalSales === 0 && totalQty > 0) {
-          totalSales = totalQty * 7.5;
-        }
-        return {
-          month: MONTH_NAMES_SHORT[month.slice(4)],
-          monthKey: month,
-          qty: totalQty,
-          sales: totalSales
-        };
-      });
-    }
-    
-    // אם זה אובייקט monthly_qty בודד
-    if (data && typeof data === 'object' && !Array.isArray(data)) {
-      return months2025.map(month => {
-        const qty = data[month] || 0;
-        // הערכת מכירות לפי 7.5₪ לפריט
-        const sales = qty * 7.5;
-        return {
-          month: MONTH_NAMES_SHORT[month.slice(4)],
-          monthKey: month,
-          qty,
-          sales
-        };
-      });
-    }
-    
-    return [];
-  }, [data]);
-  
-  const totals = useMemo(() => {
-    const totalQty = chartData.reduce((sum, d) => sum + d.qty, 0);
-    const totalSales = chartData.reduce((sum, d) => sum + d.sales, 0);
-    return { qty: totalQty, sales: totalSales };
-  }, [chartData]);
-  
-  // אם אין נתונים
-  if (chartData.every(d => d.qty === 0)) {
-    return null;
-  }
-  
-  return (
-    <div className="bg-white rounded-2xl shadow-lg p-6 border">
-      <h3 className="text-lg font-bold mb-4">📊 {title}</h3>
-      
-      {/* טבלה */}
-      <div className="overflow-x-auto mb-6">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-gray-50">
-              <th className="px-2 py-2 text-right font-semibold text-gray-600 sticky right-0 bg-gray-50">מדד</th>
-              {chartData.map(d => (
-                <th key={d.monthKey} className="px-2 py-2 text-center font-medium text-gray-600 min-w-[50px]">{d.month}</th>
-              ))}
-              <th className="px-3 py-2 text-center font-bold text-gray-800 bg-blue-50">סה"כ</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr className="border-t">
-              <td className="px-2 py-2 font-medium text-gray-700 sticky right-0 bg-white">מחזור ₪</td>
-              {chartData.map(d => (
-                <td key={d.monthKey} className="px-2 py-2 text-center text-gray-600">
-                  {d.sales >= 1000 ? (d.sales / 1000).toFixed(0) + 'K' : d.sales.toFixed(0)}
-                </td>
-              ))}
-              <td className="px-3 py-2 text-center font-bold text-blue-600 bg-blue-50">
-                ₪{totals.sales >= 1000000 ? (totals.sales / 1000000).toFixed(1) + 'M' : totals.sales >= 1000 ? (totals.sales / 1000).toFixed(0) + 'K' : totals.sales.toFixed(0)}
-              </td>
-            </tr>
-            <tr className="border-t bg-gray-50">
-              <td className="px-2 py-2 font-medium text-gray-700 sticky right-0 bg-gray-50">פריטים</td>
-              {chartData.map(d => (
-                <td key={d.monthKey} className="px-2 py-2 text-center text-gray-600">
-                  {fmt(d.qty)}
-                </td>
-              ))}
-              <td className="px-3 py-2 text-center font-bold text-emerald-600 bg-blue-50">
-                {fmt(totals.qty)}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      
-      {/* גרף משולב - עמודות + קו */}
-      <ResponsiveContainer width="100%" height={280}>
-        <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-          <YAxis 
-            yAxisId="left" 
-            orientation="right" 
-            tick={{ fontSize: 10 }} 
-            tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0) + 'K' : v}
-            label={{ value: '₪ מחזור', angle: 90, position: 'insideRight', fontSize: 10 }}
-          />
-          <YAxis 
-            yAxisId="right" 
-            orientation="left" 
-            tick={{ fontSize: 10 }}
-            tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0) + 'K' : v}
-            label={{ value: 'פריטים', angle: -90, position: 'insideLeft', fontSize: 10 }}
-          />
-          <Tooltip 
-            formatter={(value, name) => [
-              name === 'sales' ? '₪' + fmt(value) : fmt(value),
-              name === 'sales' ? 'מחזור' : 'פריטים'
-            ]}
-            labelFormatter={(label) => `חודש: ${label}`}
-          />
-          <Legend 
-            formatter={(value) => value === 'sales' ? 'מחזור ₪' : 'פריטים'}
-          />
-          <Bar yAxisId="left" dataKey="sales" fill="#3b82f6" name="sales" radius={[4, 4, 0, 0]} />
-          <Line yAxisId="right" type="monotone" dataKey="qty" stroke="#10b981" strokeWidth={3} dot={{ fill: '#10b981', r: 4 }} name="qty" />
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  );
-};
-
 const exportPDF = title => { document.title = title; window.print(); };
 const exportCSV = (data, columns, filename) => {
   const header = columns.map(c => c.l.replace(/\n/g, ' ')).join(',');
@@ -855,7 +703,7 @@ const Overview = ({ stores, products, onNav, onDrillDown }) => {
     const bot = [...active].sort((a, b) => (a.metric_12v12 || 0) - (b.metric_12v12 || 0)).slice(0, 20);
     const alerts = stores.filter(s => !s.is_inactive && (s.status_long === 'התרסקות' || s.status_long === 'ירידה')).length;
     
-    // v1.8 - Fallback count
+    // v1.7 - Fallback count
     const fallbackCount = stores.filter(s => s.is_fallback).length;
     
     // v1.4 - City sales breakdown (H2 - last 6 months)
@@ -999,9 +847,6 @@ const Overview = ({ stores, products, onNav, onDrillDown }) => {
         ))}
       </div>
     </div>
-    
-    {/* v1.8 - Monthly Sales Chart */}
-    <MonthlySalesChart data={stores} title="מכירות חודשיות 2025 - כל החנויות" />
   </div>);
 };
 
@@ -1439,10 +1284,6 @@ const StoreDetail = ({ store, onBack, allStores, excludedProducts = [], sourceWi
         ))}
       </div>
     </div>}
-    
-    {/* v1.8 - Monthly Sales Chart for this store */}
-    <MonthlySalesChart data={store.monthly_qty} title={`מכירות חודשיות 2025 - ${store.name}`} />
-    
     <div className="bg-white rounded-2xl shadow-lg p-6 border"><h3 className="text-lg font-bold mb-4">מוצרים בחנות ({prods.length}{excludedProducts.length > 0 ? ` מתוך ${allProds.length}` : ''})</h3>{prods.length > 0 ? <Table data={prods} cols={prodCols} name={'store_' + store.id + '_products'} compact /> : <p className="text-gray-500 text-center py-8">אין נתונים</p>}</div>
   </div>);
 };
@@ -1496,10 +1337,6 @@ const ProductsList = ({ products, onSelect }) => {
       </select>
       <input type="number" value={minQty || ''} onChange={e => setMinQty(Number(e.target.value) || 0)} placeholder="מינ׳ 2025" className="w-32 px-3 py-2 border border-gray-200 rounded-xl text-sm" />
     </div>
-    
-    {/* v1.8 - Monthly Sales Chart for all products */}
-    <MonthlySalesChart data={filtered} title="מכירות חודשיות 2025 - כל המוצרים" />
-    
     <Table data={filtered} cols={cols} onRow={onSelect} name="products" />
   </div>)
 };
@@ -1567,9 +1404,6 @@ const ProductDetail = ({ product, onBack, rulesConfig }) => {
       </div>
       {stores.length > 0 ? <Table data={stores} cols={storeCols} name={'product_' + product.id + '_stores'} compact /> : <p className="text-gray-500 text-center py-8">אין נתונים</p>}
     </div>
-    
-    {/* v1.8 - Monthly Sales Chart for this product */}
-    <MonthlySalesChart data={product.monthly_qty} title={`מכירות חודשיות 2025 - ${product.name}`} />
   </div>);
 };
 
@@ -2661,7 +2495,7 @@ const SettingsPage = ({ onLogout }) => {
         <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-blue-600">{STORES_RAW.length}</p><p className="text-xs text-gray-500">חנויות</p></div>
         <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-purple-600">{PRODUCTS_RAW.length}</p><p className="text-xs text-gray-500">מוצרים</p></div>
         <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-emerald-600">{STORES_RAW.filter(s => !s.is_inactive).length}</p><p className="text-xs text-gray-500">חנויות פעילות</p></div>
-        <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-gray-600">v1.8</p><p className="text-xs text-gray-500">גרסה</p></div>
+        <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-gray-600">v1.7</p><p className="text-xs text-gray-500">גרסה</p></div>
       </div>
       <p className="text-xs text-gray-400 text-center mt-4">עדכון אחרון: ינואר 2026</p>
     </div>
@@ -3003,7 +2837,7 @@ export default function App() {
         <div className="flex items-center gap-4">
           <button onClick={() => setMenu(!menu)} className="lg:hidden p-2 hover:bg-gray-100 rounded-xl">{menu ? <X size={24}/> : <Menu size={24}/>}</button>
           <BaronLogo />
-          <span className="text-xs text-gray-400 hidden sm:inline">v1.8</span>
+          <span className="text-xs text-gray-400 hidden sm:inline">v1.7</span>
         </div>
         <div className="flex items-center gap-3">
           <button onClick={() => setShowExclusions(!showExclusions)} className={'relative p-2 rounded-xl transition-colors ' + (showExclusions ? 'bg-red-100 text-red-600' : 'hover:bg-gray-100 text-gray-600')}>
