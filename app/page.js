@@ -1258,6 +1258,11 @@ const MissingProductsTable = ({ store, storeProducts }) => {
   
   const storeCity = (store.city || '').trim();
   
+  // חישוב מספר החנויות בעיר (פעם אחת)
+  const totalStoresInCity = useMemo(() => {
+    return STORES_RAW.filter(s => (s.city || '').trim() === storeCity && s.id !== store.id && !s.is_inactive).length;
+  }, [storeCity, store.id]);
+  
   const missingProducts = useMemo(() => {
     // IDs של מוצרים שהחנות כבר מוכרת
     const storeProductIds = new Set(storeProducts.map(p => p.id));
@@ -1268,7 +1273,12 @@ const MissingProductsTable = ({ store, storeProducts }) => {
     return missing.map(product => {
       // כמות בעיר - מהחנויות שמוכרות את המוצר באותה עיר
       const productStores = PRODUCT_STORES[String(product.id)] || [];
-      const cityStores = productStores.filter(s => (s.city || '').trim() === storeCity && s.id !== store.id);
+      // סינון רק חנויות עם כמות > 0
+      const cityStores = productStores.filter(s => 
+        (s.city || '').trim() === storeCity && 
+        s.id !== store.id && 
+        (s.qty_2025 || 0) > 0
+      );
       const cityQty = cityStores.reduce((sum, s) => sum + (s.qty_2025 || 0), 0);
       const cityStoreCount = cityStores.length;
       
@@ -1276,7 +1286,7 @@ const MissingProductsTable = ({ store, storeProducts }) => {
         ...product,
         city_qty: cityQty,
         city_store_count: cityStoreCount,
-        city_stores: cityStores, // שמירת רשימת החנויות
+        city_stores: cityStores, // שמירת רשימת החנויות (רק עם כמות > 0)
         total_qty: product.qty_2025 || 0
       };
     }).filter(p => minQty === 0 || p.total_qty >= minQty || p.city_qty >= minQty);
@@ -1306,7 +1316,12 @@ const MissingProductsTable = ({ store, storeProducts }) => {
         ) : (
           <span className="font-bold text-gray-400">{fmt(v)}</span>
         )}
-        {r.city_store_count > 0 && <p className="text-xs text-gray-500">{r.city_store_count} חנויות 👆</p>}
+        {r.city_store_count > 0 && (
+          <p className="text-xs text-gray-500">{r.city_store_count} מתוך {totalStoresInCity} חנויות 👆</p>
+        )}
+        {r.city_store_count === 0 && totalStoresInCity > 0 && (
+          <p className="text-xs text-gray-400">0 מתוך {totalStoresInCity} חנויות</p>
+        )}
       </div>
     )},
   ];
@@ -1370,7 +1385,7 @@ const MissingProductsTable = ({ store, storeProducts }) => {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="font-bold text-lg">{selectedProduct.name}</h3>
-                  <p className="text-emerald-100 text-sm">חנויות ב{storeCity} שמוכרות מוצר זה</p>
+                  <p className="text-emerald-100 text-sm">{selectedProduct.city_store_count} מתוך {totalStoresInCity} חנויות ב{storeCity} מוכרות מוצר זה</p>
                 </div>
                 <button onClick={() => setSelectedProduct(null)} className="p-2 hover:bg-emerald-600 rounded-lg">
                   <X size={20} />
