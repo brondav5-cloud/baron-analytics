@@ -1249,6 +1249,112 @@ const CityIndicator = ({ store, allStores }) => {
   );
 };
 
+// v1.8 - Missing Products Table Component
+const MissingProductsTable = ({ store, storeProducts }) => {
+  const [sortBy, setSortBy] = useState('total'); // 'total' or 'city'
+  const [minQty, setMinQty] = useState(100);
+  const [showTable, setShowTable] = useState(false);
+  
+  const missingProducts = useMemo(() => {
+    // IDs של מוצרים שהחנות כבר מוכרת
+    const storeProductIds = new Set(storeProducts.map(p => p.id));
+    
+    // כל המוצרים שהחנות לא מוכרת
+    const missing = PRODUCTS_RAW.filter(p => !storeProductIds.has(p.id) && !p.is_inactive);
+    
+    // חישוב כמות בעיר לכל מוצר חסר
+    const storeCity = (store.city || '').trim();
+    
+    return missing.map(product => {
+      // כמות בעיר - מהחנויות שמוכרות את המוצר באותה עיר
+      const productStores = PRODUCT_STORES[String(product.id)] || [];
+      const cityStores = productStores.filter(s => (s.city || '').trim() === storeCity && s.id !== store.id);
+      const cityQty = cityStores.reduce((sum, s) => sum + (s.qty_2025 || 0), 0);
+      const cityStoreCount = cityStores.length;
+      
+      return {
+        ...product,
+        city_qty: cityQty,
+        city_store_count: cityStoreCount,
+        total_qty: product.qty_2025 || 0
+      };
+    }).filter(p => p.total_qty >= minQty || p.city_qty >= minQty);
+  }, [store, storeProducts, minQty]);
+  
+  const sortedProducts = useMemo(() => {
+    return [...missingProducts].sort((a, b) => {
+      if (sortBy === 'city') {
+        return (b.city_qty || 0) - (a.city_qty || 0);
+      }
+      return (b.total_qty || 0) - (a.total_qty || 0);
+    });
+  }, [missingProducts, sortBy]);
+  
+  const cols = [
+    { k: 'name', l: 'מוצר', r: (v, r) => <div className="min-w-[120px]"><p className="font-medium text-sm leading-tight">{v}</p><p className="text-xs text-gray-500">{r.category}</p></div> },
+    { k: 'total_qty', l: 'כמות כללית\n(כל החברה)', r: v => <span className="font-bold text-blue-600">{fmt(v)}</span> },
+    { k: 'city_qty', l: `כמות בעיר\n(${store.city || 'לא ידוע'})`, r: (v, r) => (
+      <div className="text-center">
+        <span className={`font-bold ${v > 0 ? 'text-emerald-600' : 'text-gray-400'}`}>{fmt(v)}</span>
+        {r.city_store_count > 0 && <p className="text-xs text-gray-500">{r.city_store_count} חנויות</p>}
+      </div>
+    )},
+  ];
+  
+  if (missingProducts.length === 0) return null;
+  
+  return (
+    <div className="bg-white rounded-2xl shadow-lg p-6 border border-orange-200">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">🔍</span>
+          <h3 className="text-lg font-bold text-orange-700">מוצרים שהחנות לא מוכרת</h3>
+          <span className="text-sm text-gray-500">({sortedProducts.length})</span>
+        </div>
+        <button 
+          onClick={() => setShowTable(!showTable)} 
+          className="text-sm text-orange-600 hover:text-orange-800 bg-orange-50 px-3 py-1.5 rounded-lg"
+        >
+          {showTable ? 'הסתר' : 'הצג'} טבלה
+        </button>
+      </div>
+      
+      {showTable && (
+        <>
+          <div className="flex flex-wrap gap-3 items-center mb-4 print:hidden">
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600">מיין לפי:</label>
+              <select 
+                value={sortBy} 
+                onChange={e => setSortBy(e.target.value)} 
+                className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm"
+              >
+                <option value="total">כמות כללית (כל החברה)</option>
+                <option value="city">כמות בעיר ({store.city || 'לא ידוע'})</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600">מינימום כמות:</label>
+              <input 
+                type="number" 
+                value={minQty} 
+                onChange={e => setMinQty(Number(e.target.value) || 0)} 
+                className="w-24 px-3 py-1.5 border border-gray-200 rounded-lg text-sm" 
+              />
+            </div>
+          </div>
+          
+          <div className="bg-orange-50 rounded-lg p-3 mb-4 text-sm text-orange-800">
+            💡 <strong>הזדמנות למכירה:</strong> מוצרים אלו נמכרים טוב בחנויות אחרות אבל החנות הזו לא מקבלת אותם
+          </div>
+          
+          <Table data={sortedProducts} cols={cols} name={'store_' + store.id + '_missing'} compact />
+        </>
+      )}
+    </div>
+  );
+};
+
 const StoreDetail = ({ store, onBack, allStores, excludedProducts = [], sourceWindow, rulesConfig }) => {
   const chart = useMemo(() => { if (!store.monthly_qty) return []; return Object.entries(store.monthly_qty).sort(([a],[b]) => Number(a)-Number(b)).map(([m,v]) => ({ month: fmtMonth(m), qty: v })); }, [store]);
   
@@ -1445,6 +1551,9 @@ const StoreDetail = ({ store, onBack, allStores, excludedProducts = [], sourceWi
     </div>}
     
     <div className="bg-white rounded-2xl shadow-lg p-6 border"><h3 className="text-lg font-bold mb-4">מוצרים בחנות ({prods.length}{excludedProducts.length > 0 ? ` מתוך ${allProds.length}` : ''})</h3>{prods.length > 0 ? <Table data={prods} cols={prodCols} name={'store_' + store.id + '_products'} compact /> : <p className="text-gray-500 text-center py-8">אין נתונים</p>}</div>
+    
+    {/* v1.8 - Missing Products Table */}
+    <MissingProductsTable store={store} storeProducts={prods} />
   </div>);
 };
 
