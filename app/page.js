@@ -939,6 +939,9 @@ const Overview = ({ stores, products, onNav, onDrillDown }) => {
       </div>
     </div>
     
+    {/* v1.8 - Monthly Sales Chart - מיד אחרי ההשוואות */}
+    <MonthlySalesChart data={stores} title="מכירות חודשיות 2025 - כל החנויות" />
+    
     {/* Single status pie chart with 5 statuses */}
     <div className="bg-white rounded-2xl shadow-lg p-6 border">
       <h3 className="text-lg font-bold mb-2">📊 התפלגות סטטוסים</h3>
@@ -999,9 +1002,6 @@ const Overview = ({ stores, products, onNav, onDrillDown }) => {
         ))}
       </div>
     </div>
-    
-    {/* v1.8 - Monthly Sales Chart */}
-    <MonthlySalesChart data={stores} title="מכירות חודשיות 2025 - כל החנויות" />
   </div>);
 };
 
@@ -1379,6 +1379,10 @@ const StoreDetail = ({ store, onBack, allStores, excludedProducts = [], sourceWi
       <div className="bg-white rounded-xl shadow p-4 text-center"><p className="text-sm text-gray-500">מחזור 2024</p><p className="text-xl font-bold text-gray-600">₪{fmt(store.sales_2024)}</p></div>
       <div className="bg-white rounded-xl shadow p-4 text-center"><p className="text-sm text-gray-500">מחזור 2025</p><p className="text-xl font-bold text-gray-600">₪{fmt(store.sales_2025)}</p></div>
     </div>
+    
+    {/* v1.8 - Monthly Sales Chart - מיד אחרי הקוביות */}
+    <MonthlySalesChart data={store.monthly_qty} title={`מכירות חודשיות 2025 - ${store.name}`} />
+    
     <div className="bg-white rounded-2xl shadow-lg p-6 border"><h3 className="text-lg font-bold mb-4">מגמת כמויות</h3><ResponsiveContainer width="100%" height={250}><AreaChart data={chart}><defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" tick={{fontSize:10}} /><YAxis tickFormatter={v => fmt(v)} tick={{fontSize:10}} /><Tooltip formatter={v => fmt(v)} /><Area type="monotone" dataKey="qty" stroke="#3b82f6" fill="url(#sg)" name="כמות" /></AreaChart></ResponsiveContainer></div>
     {pieData.length > 0 && <div className="bg-white rounded-2xl shadow-lg p-6 border">
       <h3 className="text-lg font-bold mb-4">🥧 חלוקת מוצרים (TOP 10) {excludedProducts.length > 0 && <span className="text-sm font-normal text-orange-600">({excludedProducts.length} מוצרים מוחרגים)</span>}</h3>
@@ -1439,9 +1443,6 @@ const StoreDetail = ({ store, onBack, allStores, excludedProducts = [], sourceWi
         ))}
       </div>
     </div>}
-    
-    {/* v1.8 - Monthly Sales Chart for this store */}
-    <MonthlySalesChart data={store.monthly_qty} title={`מכירות חודשיות 2025 - ${store.name}`} />
     
     <div className="bg-white rounded-2xl shadow-lg p-6 border"><h3 className="text-lg font-bold mb-4">מוצרים בחנות ({prods.length}{excludedProducts.length > 0 ? ` מתוך ${allProds.length}` : ''})</h3>{prods.length > 0 ? <Table data={prods} cols={prodCols} name={'store_' + store.id + '_products'} compact /> : <p className="text-gray-500 text-center py-8">אין נתונים</p>}</div>
   </div>);
@@ -1556,6 +1557,10 @@ const ProductDetail = ({ product, onBack, rulesConfig }) => {
       <div className="bg-white rounded-xl shadow p-4 text-center"><p className="text-sm text-gray-500">חזרות % (H2)</p><p className="text-xl font-bold text-gray-600">{(product.returns_pct_last6 || 0).toFixed(1)}%</p></div>
       <div className="bg-white rounded-xl shadow p-4 text-center"><p className="text-sm text-gray-500">מחזור</p><p className="text-xl font-bold text-gray-600">₪{fmt(product.total_sales)}</p></div>
     </div>
+    
+    {/* v1.8 - Monthly Sales Chart - מיד אחרי הקוביות */}
+    <MonthlySalesChart data={product.monthly_qty} title={`מכירות חודשיות 2025 - ${product.name}`} />
+    
     <div className="bg-white rounded-2xl shadow-lg p-6 border"><h3 className="text-lg font-bold mb-4">מגמת כמויות</h3><ResponsiveContainer width="100%" height={250}><AreaChart data={chart}><defs><linearGradient id="pg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/><stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" tick={{fontSize:10}} /><YAxis tickFormatter={v => fmt(v)} tick={{fontSize:10}} /><Tooltip formatter={v => fmt(v)} /><Area type="monotone" dataKey="qty" stroke="#8b5cf6" fill="url(#pg)" name="כמות" /></AreaChart></ResponsiveContainer></div>
     <div className="bg-white rounded-2xl shadow-lg p-6 border">
       <div className="flex justify-between items-center mb-4">
@@ -1567,9 +1572,6 @@ const ProductDetail = ({ product, onBack, rulesConfig }) => {
       </div>
       {stores.length > 0 ? <Table data={stores} cols={storeCols} name={'product_' + product.id + '_stores'} compact /> : <p className="text-gray-500 text-center py-8">אין נתונים</p>}
     </div>
-    
-    {/* v1.8 - Monthly Sales Chart for this product */}
-    <MonthlySalesChart data={product.monthly_qty} title={`מכירות חודשיות 2025 - ${product.name}`} />
   </div>);
 };
 
