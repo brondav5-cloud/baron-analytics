@@ -1252,8 +1252,8 @@ const CityIndicator = ({ store, allStores }) => {
 // v1.8 - Missing Products Table Component
 const MissingProductsTable = ({ store, storeProducts }) => {
   const [sortBy, setSortBy] = useState('total'); // 'total' or 'city'
-  const [minQty, setMinQty] = useState(100);
-  const [showTable, setShowTable] = useState(false);
+  const [minQty, setMinQty] = useState(0);
+  const [showTable, setShowTable] = useState(true);
   
   const missingProducts = useMemo(() => {
     // IDs של מוצרים שהחנות כבר מוכרת
@@ -1278,7 +1278,7 @@ const MissingProductsTable = ({ store, storeProducts }) => {
         city_store_count: cityStoreCount,
         total_qty: product.qty_2025 || 0
       };
-    }).filter(p => p.total_qty >= minQty || p.city_qty >= minQty);
+    }).filter(p => minQty === 0 || p.total_qty >= minQty || p.city_qty >= minQty);
   }, [store, storeProducts, minQty]);
   
   const sortedProducts = useMemo(() => {
