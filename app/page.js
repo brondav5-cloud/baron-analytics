@@ -1254,6 +1254,9 @@ const MissingProductsTable = ({ store, storeProducts }) => {
   const [sortBy, setSortBy] = useState('total'); // 'total' or 'city'
   const [minQty, setMinQty] = useState(0);
   const [showTable, setShowTable] = useState(true);
+  const [selectedProduct, setSelectedProduct] = useState(null); // לפופאפ
+  
+  const storeCity = (store.city || '').trim();
   
   const missingProducts = useMemo(() => {
     // IDs של מוצרים שהחנות כבר מוכרת
@@ -1261,9 +1264,6 @@ const MissingProductsTable = ({ store, storeProducts }) => {
     
     // כל המוצרים שהחנות לא מוכרת
     const missing = PRODUCTS_RAW.filter(p => !storeProductIds.has(p.id) && !p.is_inactive);
-    
-    // חישוב כמות בעיר לכל מוצר חסר
-    const storeCity = (store.city || '').trim();
     
     return missing.map(product => {
       // כמות בעיר - מהחנויות שמוכרות את המוצר באותה עיר
@@ -1276,10 +1276,11 @@ const MissingProductsTable = ({ store, storeProducts }) => {
         ...product,
         city_qty: cityQty,
         city_store_count: cityStoreCount,
+        city_stores: cityStores, // שמירת רשימת החנויות
         total_qty: product.qty_2025 || 0
       };
     }).filter(p => minQty === 0 || p.total_qty >= minQty || p.city_qty >= minQty);
-  }, [store, storeProducts, minQty]);
+  }, [store, storeProducts, minQty, storeCity]);
   
   const sortedProducts = useMemo(() => {
     return [...missingProducts].sort((a, b) => {
@@ -1293,10 +1294,19 @@ const MissingProductsTable = ({ store, storeProducts }) => {
   const cols = [
     { k: 'name', l: 'מוצר', r: (v, r) => <div className="min-w-[120px]"><p className="font-medium text-sm leading-tight">{v}</p><p className="text-xs text-gray-500">{r.category}</p></div> },
     { k: 'total_qty', l: 'כמות כללית\n(כל החברה)', r: v => <span className="font-bold text-blue-600">{fmt(v)}</span> },
-    { k: 'city_qty', l: `כמות בעיר\n(${store.city || 'לא ידוע'})`, r: (v, r) => (
+    { k: 'city_qty', l: `כמות בעיר\n(${storeCity || 'לא ידוע'})`, r: (v, r) => (
       <div className="text-center">
-        <span className={`font-bold ${v > 0 ? 'text-emerald-600' : 'text-gray-400'}`}>{fmt(v)}</span>
-        {r.city_store_count > 0 && <p className="text-xs text-gray-500">{r.city_store_count} חנויות</p>}
+        {r.city_store_count > 0 ? (
+          <button 
+            onClick={(e) => { e.stopPropagation(); setSelectedProduct(r); }}
+            className="font-bold text-emerald-600 hover:text-emerald-800 hover:underline cursor-pointer"
+          >
+            {fmt(v)}
+          </button>
+        ) : (
+          <span className="font-bold text-gray-400">{fmt(v)}</span>
+        )}
+        {r.city_store_count > 0 && <p className="text-xs text-gray-500">{r.city_store_count} חנויות 👆</p>}
       </div>
     )},
   ];
@@ -1330,7 +1340,7 @@ const MissingProductsTable = ({ store, storeProducts }) => {
                 className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm"
               >
                 <option value="total">כמות כללית (כל החברה)</option>
-                <option value="city">כמות בעיר ({store.city || 'לא ידוע'})</option>
+                <option value="city">כמות בעיר ({storeCity || 'לא ידוע'})</option>
               </select>
             </div>
             <div className="flex items-center gap-2">
@@ -1345,11 +1355,56 @@ const MissingProductsTable = ({ store, storeProducts }) => {
           </div>
           
           <div className="bg-orange-50 rounded-lg p-3 mb-4 text-sm text-orange-800">
-            💡 <strong>הזדמנות למכירה:</strong> מוצרים אלו נמכרים טוב בחנויות אחרות אבל החנות הזו לא מקבלת אותם
+            💡 <strong>הזדמנות למכירה:</strong> מוצרים אלו נמכרים טוב בחנויות אחרות אבל החנות הזו לא מקבלת אותם. לחץ על הכמות בעיר לפרטי החנויות.
           </div>
           
           <Table data={sortedProducts} cols={cols} name={'store_' + store.id + '_missing'} compact />
         </>
+      )}
+      
+      {/* פופאפ חנויות בעיר */}
+      {selectedProduct && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setSelectedProduct(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-emerald-500 text-white p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-lg">{selectedProduct.name}</h3>
+                  <p className="text-emerald-100 text-sm">חנויות ב{storeCity} שמוכרות מוצר זה</p>
+                </div>
+                <button onClick={() => setSelectedProduct(null)} className="p-2 hover:bg-emerald-600 rounded-lg">
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+            <div className="p-4 max-h-[60vh] overflow-y-auto">
+              <div className="space-y-2">
+                {selectedProduct.city_stores
+                  .sort((a, b) => (b.qty_2025 || 0) - (a.qty_2025 || 0))
+                  .map((s, i) => (
+                  <div key={s.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100">
+                    <div className="flex items-center gap-3">
+                      <span className="w-6 h-6 flex items-center justify-center bg-emerald-500 text-white rounded-full text-xs font-bold">{i + 1}</span>
+                      <div>
+                        <p className="font-medium text-sm">{s.name}</p>
+                        <p className="text-xs text-gray-500">{s.driver || '-'}</p>
+                      </div>
+                    </div>
+                    <div className="text-left">
+                      <p className="font-bold text-emerald-600">{fmt(s.qty_2025 || 0)}</p>
+                      <p className="text-xs text-gray-400">פריטים 2025</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 pt-4 border-t text-center">
+                <p className="text-sm text-gray-600">
+                  סה"כ <strong className="text-emerald-600">{fmt(selectedProduct.city_qty)}</strong> פריטים ב-{selectedProduct.city_store_count} חנויות
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
