@@ -1,12 +1,13 @@
 'use client';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, Legend } from 'recharts';
-import { TrendingUp, TrendingDown, Store, Package, AlertTriangle, Award, XCircle, Search, Download, Filter, ChevronRight, ArrowUp, ArrowDown, Minus, Menu, X, Home, Bell, LogOut, User, Check, FileText, ChevronDown, Settings, HelpCircle, MapPin, ChevronLeft, AlertCircle, Plus, Trash2, ToggleLeft, ToggleRight, Upload } from 'lucide-react';
+import { TrendingUp, TrendingDown, Store, Package, AlertTriangle, Award, XCircle, Search, Download, Filter, ChevronRight, ArrowUp, ArrowDown, Minus, Menu, X, Home, Bell, LogOut, User, Check, FileText, ChevronDown, Settings, HelpCircle, MapPin, ChevronLeft, AlertCircle, Plus, Trash2, ToggleLeft, ToggleRight, Upload, BarChart3 } from 'lucide-react';
 import STORES_RAW from './stores.json';
 import PRODUCTS_RAW from './products.json';
 import FILTERS from './filters.json';
 import STORE_PRODUCTS from './store_products.json';
 import PRODUCT_STORES from './product_stores.json';
+import HOLIDAYS from './holidays.json';
 
 // ============= RULE-BASED STATUS SYSTEM =============
 
@@ -213,26 +214,22 @@ const METRIC_INFO = {
 // Build detailed metrics comparison for display
 const buildMetricsComparison = (item, rule) => {
   const comparisons = [];
-  const opDisplay = { '>=': '≥', '>': '>', '<=': '≤', '<': '<', 'between': 'בין' };
   
   if (rule.metric_12v12?.enabled) {
     const c = rule.metric_12v12;
     const actual = item.metric_12v12;
     let ruleText = '';
-    let passed = true;
     
     if (c.operator === 'between') {
       ruleText = `${c.value}% עד ${c.value2}%`;
-      passed = actual >= Math.min(c.value, c.value2) && actual <= Math.max(c.value, c.value2);
     } else if (c.min !== undefined && c.max !== undefined) {
       ruleText = `${c.min}% עד ${c.max}%`;
-      passed = actual >= c.min && actual <= c.max;
     } else if (c.min !== undefined) {
       ruleText = `≥ ${c.min}%`;
-      passed = actual >= c.min;
     } else if (c.max !== undefined) {
       ruleText = `≤ ${c.max}%`;
-      passed = actual <= c.max;
+    } else {
+      ruleText = '-';
     }
     
     comparisons.push({
@@ -241,7 +238,7 @@ const buildMetricsComparison = (item, rule) => {
       period: METRIC_INFO['12v12'].period,
       rule: ruleText,
       actual: actual?.toFixed(1) + '%',
-      passed
+      actualValue: actual
     });
   }
   
@@ -249,20 +246,17 @@ const buildMetricsComparison = (item, rule) => {
     const c = rule.metric_6v6;
     const actual = item.metric_6v6;
     let ruleText = '';
-    let passed = true;
     
     if (c.operator === 'between') {
       ruleText = `${c.value}% עד ${c.value2}%`;
-      passed = actual >= Math.min(c.value, c.value2) && actual <= Math.max(c.value, c.value2);
     } else if (c.min !== undefined && c.max !== undefined) {
       ruleText = `${c.min}% עד ${c.max}%`;
-      passed = actual >= c.min && actual <= c.max;
     } else if (c.min !== undefined) {
       ruleText = `≥ ${c.min}%`;
-      passed = actual >= c.min;
     } else if (c.max !== undefined) {
       ruleText = `≤ ${c.max}%`;
-      passed = actual <= c.max;
+    } else {
+      ruleText = '-';
     }
     
     comparisons.push({
@@ -271,7 +265,7 @@ const buildMetricsComparison = (item, rule) => {
       period: METRIC_INFO['6v6'].period,
       rule: ruleText,
       actual: actual?.toFixed(1) + '%',
-      passed
+      actualValue: actual
     });
   }
   
@@ -279,20 +273,17 @@ const buildMetricsComparison = (item, rule) => {
     const c = rule.metric_3v3;
     const actual = item.metric_3v3;
     let ruleText = '';
-    let passed = true;
     
     if (c.operator === 'between') {
       ruleText = `${c.value}% עד ${c.value2}%`;
-      passed = actual >= Math.min(c.value, c.value2) && actual <= Math.max(c.value, c.value2);
     } else if (c.min !== undefined && c.max !== undefined) {
       ruleText = `${c.min}% עד ${c.max}%`;
-      passed = actual >= c.min && actual <= c.max;
     } else if (c.min !== undefined) {
       ruleText = `≥ ${c.min}%`;
-      passed = actual >= c.min;
     } else if (c.max !== undefined) {
       ruleText = `≤ ${c.max}%`;
-      passed = actual <= c.max;
+    } else {
+      ruleText = '-';
     }
     
     comparisons.push({
@@ -301,7 +292,7 @@ const buildMetricsComparison = (item, rule) => {
       period: METRIC_INFO['3v3'].period,
       rule: ruleText,
       actual: actual?.toFixed(1) + '%',
-      passed
+      actualValue: actual
     });
   }
   
@@ -319,7 +310,7 @@ const buildFallbackComparison = (item, rule) => {
     period: METRIC_INFO[rule.metric]?.period || '',
     rule: `${opDisplay[rule.operator]} ${rule.value}%`,
     actual: actual.toFixed(1) + '%',
-    passed: true
+    actualValue: actual
   }];
 };
 
@@ -455,6 +446,65 @@ const METRIC_TIPS = {
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#f97316', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
 
+// v1.10.8 - Period options for data tables
+const PERIOD_OPTIONS = [
+  { id: 'h2_2025', label: 'H2 2025 (יולי-דצמ)', months: ['202507', '202508', '202509', '202510', '202511', '202512'] },
+  { id: 'q4_2025', label: 'Q4 2025 (אוק-דצמ)', months: ['202510', '202511', '202512'] },
+  { id: 'last3', label: '3 חודשים אחרונים', months: ['202510', '202511', '202512'] },
+  { id: 'last6', label: '6 חודשים אחרונים', months: ['202507', '202508', '202509', '202510', '202511', '202512'] },
+  { id: 'h1_2025', label: 'H1 2025 (ינו-יונ)', months: ['202501', '202502', '202503', '202504', '202505', '202506'] },
+  { id: 'year_2025', label: 'שנת 2025', months: ['202501', '202502', '202503', '202504', '202505', '202506', '202507', '202508', '202509', '202510', '202511', '202512'] },
+  { id: 'year_2024', label: 'שנת 2024', months: ['202401', '202402', '202403', '202404', '202405', '202406', '202407', '202408', '202409', '202410', '202411', '202412'] },
+];
+
+// v1.10.8 - Period selector component
+const PeriodSelector = ({ value, onChange, className = '' }) => (
+  <select 
+    value={value} 
+    onChange={e => onChange(e.target.value)}
+    className={`px-3 py-1.5 border rounded-lg text-sm bg-white focus:ring-2 focus:ring-purple-500 ${className}`}
+  >
+    {PERIOD_OPTIONS.map(opt => (
+      <option key={opt.id} value={opt.id}>{opt.label}</option>
+    ))}
+  </select>
+);
+
+// v1.10.8 - Calculate data for a store based on selected period
+const calcStoreDataForPeriod = (store, periodId) => {
+  const period = PERIOD_OPTIONS.find(p => p.id === periodId) || PERIOD_OPTIONS[0];
+  const months = period.months;
+  
+  const gross = months.reduce((sum, m) => sum + ((store.monthly_gross || {})[m] || 0), 0);
+  const net = months.reduce((sum, m) => sum + ((store.monthly_net || store.monthly_qty || {})[m] || 0), 0);
+  const returns = months.reduce((sum, m) => sum + ((store.monthly_returns || {})[m] || 0), 0);
+  const deliveries = months.reduce((sum, m) => sum + ((store.monthly_deliveries || {})[m] || 0), 0);
+  const returnsPct = gross > 0 ? (returns / gross * 100) : 0;
+  const avgPerDelivery = deliveries > 0 ? (net / deliveries) : 0;
+  
+  return {
+    ...store,
+    period_gross: gross,
+    period_net: net,
+    period_returns: returns,
+    period_deliveries: deliveries,
+    period_returns_pct: returnsPct,
+    period_avg_per_delivery: avgPerDelivery
+  };
+};
+
+// v1.10.8 - Get period label
+const getPeriodLabel = (periodId) => {
+  const period = PERIOD_OPTIONS.find(p => p.id === periodId);
+  return period ? period.label : 'H2 2025';
+};
+
+// Month names for charts
+const MONTH_NAMES_SHORT = {
+  '01': 'ינו', '02': 'פבר', '03': 'מרץ', '04': 'אפר', '05': 'מאי', '06': 'יונ',
+  '07': 'יול', '08': 'אוג', '09': 'ספט', '10': 'אוק', '11': 'נוב', '12': 'דצמ'
+};
+
 // Helper to get short-term status (for filters)
 const getShortTermStatus = (item) => {
   return item.status_short || 'יציב';
@@ -517,7 +567,7 @@ const LoginScreen = ({ onLogin }) => {
             />
             {error && <p className="text-red-500 text-sm mt-1">סיסמא שגויה</p>}
           </div>
-          <button onClick={handleLogin} className="w-full py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-medium rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg">
+          <button onClick={handleLogin} className="w-full py-3 bg-gradient-to-r from-blue-700 to-blue-800 text-white font-medium rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg">
             כניסה למערכת
           </button>
         </div>
@@ -583,7 +633,7 @@ const ShortTermCell = ({ value, ok }) => {
 };
 
 const Card = ({ title, value, sub, trend, icon: Icon, color = 'blue' }) => {
-  const cols = { blue: 'from-blue-500 to-blue-600', green: 'from-emerald-500 to-emerald-600', red: 'from-red-500 to-red-600', purple: 'from-purple-500 to-purple-600' };
+  const cols = { blue: 'from-blue-700 to-blue-800', green: 'from-emerald-500 to-emerald-600', red: 'from-red-500 to-red-600', purple: 'from-purple-500 to-purple-600' };
   return (<div className="bg-white rounded-2xl shadow-lg p-4 border border-gray-100">
     <div className="flex items-start justify-between">
       <div><p className="text-gray-500 text-sm">{title}</p><p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>{sub && <p className="text-gray-400 text-xs mt-1">{sub}</p>}</div>
@@ -601,6 +651,514 @@ const MBox = ({ label, value, sub, pos, extra }) => {
     {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
     {extra && <p className="text-xs text-gray-500 mt-1 border-t pt-1">{extra}</p>}
   </div>);
+};
+
+// Monthly Sales Table - shows last 12 months of sales and quantities
+// v1.8.5 - Full table with gross/net/returns/deliveries
+const MonthlySalesChart = ({ data, store, title = "מכירות חודשיות" }) => {
+  const [showYear, setShowYear] = useState('2025');
+  const [hideHolidays, setHideHolidays] = useState(false);
+  
+  // מיפוי חגים לפי חודש - כולל תאריכים
+  const holidaysPerMonth = useMemo(() => {
+    const result = {};
+    for (const [weekStart, holiday] of Object.entries(HOLIDAYS.weeks || {})) {
+      const year = weekStart.slice(0, 4);
+      const month = weekStart.slice(5, 7);
+      const monthKey = year + month;
+      if (!result[monthKey]) {
+        result[monthKey] = [];
+      }
+      if (!result[monthKey].find(h => h.name === holiday.name)) {
+        result[monthKey].push({
+          name: holiday.name,
+          type: holiday.type,
+          dates: holiday.dates || ''
+        });
+      }
+    }
+    return result;
+  }, []);
+  
+  const chartData = useMemo(() => {
+    const months = showYear === '2025' 
+      ? ['202501', '202502', '202503', '202504', '202505', '202506', '202507', '202508', '202509', '202510', '202511', '202512']
+      : ['202401', '202402', '202403', '202404', '202405', '202406', '202407', '202408', '202409', '202410', '202411', '202412'];
+    
+    let result = [];
+    
+    // אם זה מערך של חנויות - סיכום כללי
+    if (Array.isArray(data)) {
+      result = months.map(month => {
+        let gross = 0, net = 0, returns = 0, sales = 0, deliveries = 0;
+        data.forEach(item => {
+          gross += item.monthly_gross?.[month] || 0;
+          net += item.monthly_net?.[month] || item.monthly_qty?.[month] || 0;
+          returns += item.monthly_returns?.[month] || 0;
+          sales += item.monthly_sales?.[month] || item.monthly?.[month] || 0;
+          deliveries += item.monthly_deliveries?.[month] || 0;
+        });
+        if (sales === 0 && net > 0) sales = net * 7.5;
+        const returnsPct = gross > 0 ? (returns / gross * 100) : 0;
+        return {
+          month: MONTH_NAMES_SHORT[month.slice(4)],
+          monthKey: month,
+          gross, net, returns, returnsPct, sales, deliveries,
+          holidays: holidaysPerMonth[month] || []
+        };
+      });
+    } 
+    // אם יש store - לקחת נתונים מהחנות
+    else if (store) {
+      result = months.map(month => {
+        let gross = store.monthly_gross?.[month] || 0;
+        let net = store.monthly_net?.[month] || store.monthly_qty?.[month] || 0;
+        let returns = store.monthly_returns?.[month] || 0;
+        // טיפול בערכים שליליים - מציג 0
+        gross = Math.max(0, gross);
+        net = Math.max(0, net);
+        returns = Math.max(0, returns);
+        const sales = store.monthly_sales?.[month] || (net * 7.5);
+        const deliveries = store.monthly_deliveries?.[month] || 0;
+        const returnsPct = gross > 0 ? (returns / gross * 100) : 0;
+        return {
+          month: MONTH_NAMES_SHORT[month.slice(4)],
+          monthKey: month,
+          gross, net, returns, returnsPct, sales, deliveries,
+          holidays: holidaysPerMonth[month] || []
+        };
+      });
+    }
+    // אם זה אובייקט monthly_qty בודד (למוצר)
+    else if (data && typeof data === 'object') {
+      result = months.map(month => {
+        const net = data[month] || 0;
+        return {
+          month: MONTH_NAMES_SHORT[month.slice(4)],
+          monthKey: month,
+          gross: 0, net, returns: 0, returnsPct: 0, 
+          sales: net * 7.5, deliveries: 0,
+          holidays: holidaysPerMonth[month] || []
+        };
+      });
+    }
+    
+    // סימון חודשי חג
+    if (hideHolidays) {
+      result = result.map(d => ({
+        ...d,
+        isHolidayMonth: d.holidays.some(h => h.type === 'closed' || h.type === 'pre_holiday')
+      }));
+    }
+    
+    return result;
+  }, [data, store, showYear, holidaysPerMonth, hideHolidays]);
+  
+  const totals = useMemo(() => {
+    const validData = hideHolidays ? chartData.filter(d => !d.isHolidayMonth) : chartData;
+    const gross = validData.reduce((sum, d) => sum + d.gross, 0);
+    const net = validData.reduce((sum, d) => sum + d.net, 0);
+    const returns = validData.reduce((sum, d) => sum + d.returns, 0);
+    const sales = validData.reduce((sum, d) => sum + d.sales, 0);
+    const deliveries = validData.reduce((sum, d) => sum + d.deliveries, 0);
+    const returnsPct = gross > 0 ? (returns / gross * 100) : 0;
+    return { gross, net, returns, returnsPct, sales, deliveries };
+  }, [chartData, hideHolidays]);
+  
+  if (chartData.every(d => d.net === 0 && d.gross === 0)) {
+    return null;
+  }
+  
+  const hasGross = totals.gross > 0;
+  const hasDeliveries = totals.deliveries > 0;
+  
+  return (
+    <div className="bg-white rounded-2xl shadow-lg p-6 border">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <h3 className="text-xl font-bold">📊 {title} - {showYear}</h3>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-sm cursor-pointer bg-gray-50 px-3 py-1.5 rounded-lg">
+            <input 
+              type="checkbox" 
+              checked={hideHolidays} 
+              onChange={(e) => setHideHolidays(e.target.checked)}
+              className="w-4 h-4 accent-blue-600"
+            />
+            <span>הסתר חודשי חג</span>
+          </label>
+          <div className="flex gap-1">
+            <button 
+              onClick={() => setShowYear('2024')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${showYear === '2024' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            >
+              2024
+            </button>
+            <button 
+              onClick={() => setShowYear('2025')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${showYear === '2025' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            >
+              2025
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      {/* טבלה */}
+      <div className="overflow-x-auto mb-6">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gradient-to-r from-slate-100 to-slate-200">
+              <th className="px-3 py-3 text-right font-bold text-gray-700 sticky right-0 bg-slate-100 min-w-[130px] border-l">מדד (לפי חודש)</th>
+              {chartData.map(d => (
+                <th key={d.monthKey} className={`px-3 py-3 text-center font-semibold min-w-[65px] ${d.isHolidayMonth ? 'opacity-40' : ''}`}>
+                  {d.month}
+                </th>
+              ))}
+              <th className="px-4 py-3 text-center font-bold text-white bg-blue-600 min-w-[85px] border-r">סה"כ {showYear}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {/* ברוטו */}
+            {hasGross && (
+              <tr className="border-t hover:bg-blue-50/50">
+                <td className="px-3 py-2.5 font-semibold text-blue-700 sticky right-0 bg-white border-l">ברוטו</td>
+                {chartData.map(d => (
+                  <td key={d.monthKey} className={`px-3 py-2.5 text-center font-medium ${d.isHolidayMonth ? 'opacity-40 bg-gray-100' : ''}`}>
+                    {d.gross > 0 ? fmt(d.gross) : '-'}
+                  </td>
+                ))}
+                <td className="px-4 py-2.5 text-center font-bold text-blue-700 bg-blue-50 border-r">{fmt(totals.gross)}</td>
+              </tr>
+            )}
+            
+            {/* נטו (פריטים) */}
+            <tr className="border-t bg-emerald-50/30 hover:bg-emerald-50">
+              <td className="px-3 py-2.5 font-semibold text-emerald-700 sticky right-0 bg-emerald-50/30 border-l">נטו (פריטים)</td>
+              {chartData.map(d => (
+                <td key={d.monthKey} className={`px-3 py-2.5 text-center font-medium text-emerald-600 ${d.isHolidayMonth ? 'opacity-40 bg-gray-100' : ''}`}>
+                  {d.net > 0 ? fmt(d.net) : '-'}
+                </td>
+              ))}
+              <td className="px-4 py-2.5 text-center font-bold text-emerald-700 bg-blue-50 border-r">{fmt(totals.net)}</td>
+            </tr>
+            
+            {/* חזרות */}
+            {hasGross && (
+              <tr className="border-t hover:bg-red-50/50">
+                <td className="px-3 py-2.5 font-semibold text-red-600 sticky right-0 bg-white border-l">חזרות</td>
+                {chartData.map(d => (
+                  <td key={d.monthKey} className={`px-3 py-2.5 text-center font-medium text-red-500 ${d.isHolidayMonth ? 'opacity-40 bg-gray-100' : ''}`}>
+                    {d.returns > 0 ? fmt(d.returns) : '-'}
+                  </td>
+                ))}
+                <td className="px-4 py-2.5 text-center font-bold text-red-600 bg-blue-50 border-r">{fmt(totals.returns)}</td>
+              </tr>
+            )}
+            
+            {/* חזרות % */}
+            {hasGross && (
+              <tr className="border-t bg-red-50/30 hover:bg-red-50">
+                <td className="px-3 py-2.5 font-semibold text-red-600 sticky right-0 bg-red-50/30 border-l">חזרות %</td>
+                {chartData.map(d => (
+                  <td key={d.monthKey} className={`px-3 py-2.5 text-center font-medium ${d.returnsPct > 20 ? 'text-red-600' : d.returnsPct > 10 ? 'text-orange-500' : 'text-gray-500'} ${d.isHolidayMonth ? 'opacity-40 bg-gray-100' : ''}`}>
+                    {d.gross > 0 ? d.returnsPct.toFixed(0) + '%' : '-'}
+                  </td>
+                ))}
+                <td className="px-4 py-2.5 text-center font-bold text-red-600 bg-blue-50 border-r">{totals.returnsPct.toFixed(0)}%</td>
+              </tr>
+            )}
+            
+            {/* מחזור ₪ */}
+            <tr className="border-t hover:bg-blue-50/50">
+              <td className="px-3 py-2.5 font-semibold text-blue-700 sticky right-0 bg-white border-l">מחזור ₪</td>
+              {chartData.map(d => (
+                <td key={d.monthKey} className={`px-3 py-2.5 text-center font-medium text-blue-600 ${d.isHolidayMonth ? 'opacity-40 bg-gray-100' : ''}`}>
+                  {d.sales >= 1000 ? (d.sales / 1000).toFixed(0) + 'K' : d.sales > 0 ? d.sales.toFixed(0) : '-'}
+                </td>
+              ))}
+              <td className="px-4 py-2.5 text-center font-bold text-blue-700 bg-blue-50 border-r">
+                ₪{totals.sales >= 1000000 ? (totals.sales / 1000000).toFixed(1) + 'M' : (totals.sales / 1000).toFixed(0) + 'K'}
+              </td>
+            </tr>
+            
+            {/* אספקות */}
+            {hasDeliveries && (
+              <tr className="border-t bg-purple-50/30 hover:bg-purple-50">
+                <td className="px-3 py-2.5 font-semibold text-purple-700 sticky right-0 bg-purple-50/30 border-l">אספקות בחודש</td>
+                {chartData.map(d => (
+                  <td key={d.monthKey} className={`px-3 py-2.5 text-center font-medium text-purple-600 ${d.isHolidayMonth ? 'opacity-40 bg-gray-100' : ''}`}>
+                    {d.deliveries > 0 ? d.deliveries : '-'}
+                  </td>
+                ))}
+                <td className="px-4 py-2.5 text-center font-bold text-purple-700 bg-blue-50 border-r">{totals.deliveries}</td>
+              </tr>
+            )}
+            
+            {/* שורת חגים עם תאריכים */}
+            <tr className="border-t bg-blue-50/50">
+              <td className="px-3 py-2 font-semibold text-blue-700 sticky right-0 bg-blue-50/50 text-xs border-l">🕎 חגים</td>
+              {chartData.map(d => (
+                <td key={d.monthKey} className="px-1 py-2 text-center text-xs text-blue-700">
+                  {d.holidays.length > 0 ? (
+                    <div className="flex flex-col leading-tight">
+                      <span className="font-semibold">{d.holidays.map(h => h.name).join(', ')}</span>
+                      <span className="text-[10px] text-blue-600 mt-0.5">{d.holidays.map(h => h.dates).filter(Boolean).join(', ')}</span>
+                    </div>
+                  ) : '-'}
+                </td>
+              ))}
+              <td className="px-4 py-2 text-center bg-blue-50 border-r">-</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      
+      {/* גרף - v1.10.7 improved for mobile */}
+      <ResponsiveContainer width="100%" height={320}>
+        <BarChart 
+          data={hideHolidays ? chartData.filter(d => !d.isHolidayMonth) : chartData} 
+          margin={{ top: 20, right: 10, left: 10, bottom: 5 }}
+          barCategoryGap="15%"
+        >
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="month" tick={{ fontSize: 11 }} interval={0} />
+          <YAxis 
+            yAxisId="left" 
+            orientation="right" 
+            tick={{ fontSize: 10 }} 
+            tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0) + 'K' : v}
+            width={35}
+          />
+          <YAxis 
+            yAxisId="right" 
+            orientation="left" 
+            tick={{ fontSize: 10 }}
+            tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0) + 'K' : v}
+            width={35}
+          />
+          <Tooltip 
+            formatter={(value, name) => [
+              name === 'sales' ? '₪' + fmt(Math.round(value)) : fmt(value),
+              name === 'gross' ? 'ברוטו' : name === 'net' ? 'נטו' : name === 'returns' ? 'חזרות' : 'מחזור'
+            ]}
+          />
+          <Legend formatter={(value) => value === 'gross' ? 'ברוטו' : value === 'net' ? 'נטו' : 'חזרות'} />
+          {hasGross && <Bar yAxisId="left" dataKey="gross" fill="#3b82f6" name="gross" radius={[4, 4, 0, 0]} barSize={20} />}
+          <Bar yAxisId="left" dataKey="net" fill="#10b981" name="net" radius={[4, 4, 0, 0]} barSize={20} />
+          {hasGross && <Bar yAxisId="left" dataKey="returns" fill="#ef4444" name="returns" radius={[4, 4, 0, 0]} barSize={20} />}
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
+// v1.8.1 - Missing Products Table Component
+const MissingProductsTable = ({ store, storeProducts, allStores }) => {
+  const [sortBy, setSortBy] = useState('total'); // 'total' or 'city'
+  const [minQty, setMinQty] = useState(100);
+  const [showTable, setShowTable] = useState(false);
+  const [expandedProduct, setExpandedProduct] = useState(null); // Track which product's stores to show
+  const expandedRef = React.useRef(null);
+  
+  const storeCity = (store.city || '').trim();
+  
+  // Count total stores in this city
+  const totalStoresInCity = useMemo(() => {
+    if (!allStores) return 0;
+    return allStores.filter(s => (s.city || '').trim() === storeCity && s.id !== store.id && !s.is_inactive).length;
+  }, [allStores, storeCity, store.id]);
+  
+  const missingProducts = useMemo(() => {
+    // IDs של מוצרים שהחנות כבר מוכרת
+    const storeProductIds = new Set(storeProducts.map(p => p.id));
+    
+    // כל המוצרים שהחנות לא מוכרת
+    const missing = PRODUCTS_RAW.filter(p => !storeProductIds.has(p.id) && !p.is_inactive);
+    
+    return missing.map(product => {
+      // כמות בעיר - מהחנויות שמוכרות את המוצר באותה עיר
+      const productStores = PRODUCT_STORES[String(product.id)] || [];
+      const cityStores = productStores.filter(s => (s.city || '').trim() === storeCity && s.id !== store.id);
+      const cityQty = cityStores.reduce((sum, s) => sum + (s.qty_2025 || 0), 0);
+      const cityStoreCount = cityStores.length;
+      
+      return {
+        ...product,
+        city_qty: cityQty,
+        city_store_count: cityStoreCount,
+        city_stores: cityStores, // Store the actual stores for display
+        total_qty: product.qty_2025 || 0
+      };
+    }).filter(p => p.total_qty >= minQty || p.city_qty >= minQty);
+  }, [store, storeProducts, minQty, storeCity]);
+  
+  const sortedProducts = useMemo(() => {
+    return [...missingProducts].sort((a, b) => {
+      if (sortBy === 'city') {
+        return (b.city_qty || 0) - (a.city_qty || 0);
+      }
+      return (b.total_qty || 0) - (a.total_qty || 0);
+    });
+  }, [missingProducts, sortBy]);
+  
+  // Get expanded product data
+  const expandedProductData = useMemo(() => {
+    if (!expandedProduct) return null;
+    return sortedProducts.find(p => p.id === expandedProduct);
+  }, [expandedProduct, sortedProducts]);
+  
+  // Scroll to expanded section when it opens
+  React.useEffect(() => {
+    if (expandedProduct && expandedRef.current) {
+      setTimeout(() => {
+        expandedRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    }
+  }, [expandedProduct]);
+  
+  const cols = [
+    { k: 'name', l: 'מוצר', r: (v, r) => <div className="min-w-[120px]"><p className="font-medium text-sm leading-tight">{v}</p><p className="text-xs text-gray-500">{r.category}</p></div> },
+    { k: 'total_qty', l: 'כמות כללית\n(כל החברה)', r: v => <span className="font-bold text-blue-600">{fmt(v)}</span> },
+    { k: 'city_qty', l: `כמות בעיר\n(${storeCity || 'לא ידוע'})`, r: (v, r) => (
+      <div className="text-center">
+        {r.city_store_count > 0 ? (
+          <button 
+            onClick={(e) => { e.stopPropagation(); setExpandedProduct(expandedProduct === r.id ? null : r.id); }}
+            className="group cursor-pointer"
+          >
+            <span className="font-bold text-emerald-600 group-hover:underline">{fmt(v)}</span>
+            <p className="text-xs text-gray-500">
+              <span className="text-emerald-600 font-medium">{r.city_store_count}</span> מתוך {totalStoresInCity} חנויות 👆
+            </p>
+          </button>
+        ) : (
+          <span className="font-bold text-gray-400">{fmt(v)}</span>
+        )}
+      </div>
+    )},
+  ];
+  
+  if (missingProducts.length === 0) return null;
+  
+  return (
+    <div className="bg-white rounded-2xl shadow-lg p-6 border border-orange-200">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">🔍</span>
+          <h3 className="text-lg font-bold text-orange-700">מוצרים שהחנות לא מוכרת</h3>
+          <span className="text-sm text-gray-500">({sortedProducts.length})</span>
+        </div>
+        <button 
+          onClick={() => setShowTable(!showTable)} 
+          className="text-sm text-orange-600 hover:text-orange-800 bg-orange-50 px-3 py-1.5 rounded-lg"
+        >
+          {showTable ? 'הסתר' : 'הצג'} טבלה
+        </button>
+      </div>
+      
+      {showTable && (
+        <>
+          <div className="flex flex-wrap gap-3 items-center mb-4 print:hidden">
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600">מיין לפי:</label>
+              <select 
+                value={sortBy} 
+                onChange={e => setSortBy(e.target.value)} 
+                className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm"
+              >
+                <option value="total">כמות כללית (כל החברה)</option>
+                <option value="city">כמות בעיר ({store.city || 'לא ידוע'})</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600">מינימום כמות:</label>
+              <input 
+                type="number" 
+                value={minQty} 
+                onChange={e => setMinQty(Number(e.target.value) || 0)} 
+                className="w-24 px-3 py-1.5 border border-gray-200 rounded-lg text-sm" 
+              />
+            </div>
+          </div>
+          
+          <div className="bg-orange-50 rounded-lg p-3 mb-4 text-sm text-orange-800">
+            💡 <strong>הזדמנות למכירה:</strong> מוצרים אלו נמכרים טוב בחנויות אחרות אבל החנות הזו לא מקבלת אותם. לחץ על מספר הכמות בעיר לצפייה בחנויות.
+          </div>
+          
+          <Table data={sortedProducts} cols={cols} name={'store_' + store.id + '_missing'} compact />
+          
+          {/* Expanded stores popup */}
+          {expandedProductData && expandedProductData.city_stores && expandedProductData.city_stores.length > 0 && (
+            <div ref={expandedRef} className="mt-4 p-4 bg-emerald-50 rounded-xl border-2 border-emerald-200">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🏪</span>
+                  <h4 className="font-bold text-emerald-800">
+                    חנויות ב{storeCity} שמוכרות "{expandedProductData.name}"
+                  </h4>
+                </div>
+                <button 
+                  onClick={() => setExpandedProduct(null)}
+                  className="text-emerald-600 hover:text-emerald-800 text-sm bg-emerald-100 px-2 py-1 rounded"
+                >
+                  ✕ סגור
+                </button>
+              </div>
+              
+              {/* Summary stats */}
+              <div className="bg-emerald-100 rounded-lg p-3 mb-4 flex flex-wrap gap-4 items-center text-sm">
+                <div>
+                  <span className="text-emerald-700">סה"כ חנויות בעיר: </span>
+                  <span className="font-bold text-emerald-800">{totalStoresInCity}</span>
+                </div>
+                <div>
+                  <span className="text-emerald-700">מוכרות את המוצר: </span>
+                  <span className="font-bold text-emerald-800">{expandedProductData.city_store_count}</span>
+                </div>
+                <div>
+                  <span className="text-emerald-700">סה"כ נמכר בעיר: </span>
+                  <span className="font-bold text-emerald-800">{fmt(expandedProductData.city_qty)}</span>
+                </div>
+              </div>
+              
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-emerald-100 text-emerald-800">
+                      <th className="text-right py-2 px-3 font-semibold">חנות</th>
+                      <th className="text-center py-2 px-3 font-semibold">כמות שנתית 2025</th>
+                      <th className="text-center py-2 px-3 font-semibold">ממוצע לחודש</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...expandedProductData.city_stores]
+                      .sort((a, b) => (b.qty_2025 || 0) - (a.qty_2025 || 0))
+                      .map((s, idx) => {
+                        const monthlyAvg = (s.qty_2025 || 0) / 12;
+                        return (
+                          <tr key={s.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-emerald-50'}>
+                            <td className="py-2 px-3 font-medium">{s.name}</td>
+                            <td className="py-2 px-3 text-center font-bold text-emerald-600">{fmt(s.qty_2025 || 0)}</td>
+                            <td className="py-2 px-3 text-center text-gray-600">{fmt(Math.round(monthlyAvg))}</td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-emerald-200 font-bold">
+                      <td className="py-2 px-3">סה"כ</td>
+                      <td className="py-2 px-3 text-center text-emerald-700">{fmt(expandedProductData.city_qty)}</td>
+                      <td className="py-2 px-3 text-center text-gray-700">{fmt(Math.round(expandedProductData.city_qty / 12))}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
 };
 
 const MultiSelect = ({ label, opts, selected, onChange, placeholder = 'הכל' }) => {
@@ -625,158 +1183,6 @@ const MetricCell = ({ pct, from, to }) => (<div className="text-center"><span cl
 const ReturnsCell = ({ pctL6, pctP6, change }) => (<div className="text-center"><span className="text-sm">{(pctP6 || 0).toFixed(1)}%→{(pctL6 || 0).toFixed(1)}%</span><p className={`text-xs font-bold ${change > 0 ? 'text-red-500' : 'text-emerald-500'}`}>{change > 0 ? '+' : ''}{(change || 0).toFixed(1)}%</p></div>);
 const PeakCell = ({ pct, peak, current }) => (<div className="text-center"><span className={`font-bold ${pct >= -20 ? 'text-emerald-600' : pct >= -40 ? 'text-orange-500' : 'text-red-600'}`}>{fmtPct(pct)}</span><p className="text-xs text-gray-400">שיא(4): {fmt(peak)} | דצמ: {fmt(current)}</p></div>);
 
-// ============= MONTHLY SALES CHART COMPONENT =============
-const MONTH_NAMES_SHORT = {
-  '01': 'ינו', '02': 'פבר', '03': 'מרץ', '04': 'אפר', 
-  '05': 'מאי', '06': 'יונ', '07': 'יול', '08': 'אוג',
-  '09': 'ספט', '10': 'אוק', '11': 'נוב', '12': 'דצמ'
-};
-
-const MonthlySalesChart = ({ data, title = "מכירות חודשיות 2025" }) => {
-  // data יכול להיות: 
-  // 1. אובייקט monthly_qty מחנות/מוצר בודד
-  // 2. מערך של חנויות/מוצרים לסיכום כללי
-  
-  const chartData = useMemo(() => {
-    // חודשי 2025
-    const months2025 = ['202501', '202502', '202503', '202504', '202505', '202506', 
-                        '202507', '202508', '202509', '202510', '202511', '202512'];
-    
-    // אם זה מערך של חנויות/מוצרים - סכום את הכל
-    if (Array.isArray(data)) {
-      return months2025.map(month => {
-        let totalQty = 0;
-        let totalSales = 0;
-        data.forEach(item => {
-          if (item.monthly_qty && item.monthly_qty[month]) {
-            totalQty += item.monthly_qty[month];
-          }
-          if (item.monthly_sales && item.monthly_sales[month]) {
-            totalSales += item.monthly_sales[month];
-          }
-        });
-        // אם אין נתוני מכירות, נעריך לפי ממוצע מחיר של 7.5₪ לפריט
-        if (totalSales === 0 && totalQty > 0) {
-          totalSales = totalQty * 7.5;
-        }
-        return {
-          month: MONTH_NAMES_SHORT[month.slice(4)],
-          monthKey: month,
-          qty: totalQty,
-          sales: totalSales
-        };
-      });
-    }
-    
-    // אם זה אובייקט monthly_qty בודד
-    if (data && typeof data === 'object' && !Array.isArray(data)) {
-      return months2025.map(month => {
-        const qty = data[month] || 0;
-        // הערכת מכירות לפי 7.5₪ לפריט
-        const sales = qty * 7.5;
-        return {
-          month: MONTH_NAMES_SHORT[month.slice(4)],
-          monthKey: month,
-          qty,
-          sales
-        };
-      });
-    }
-    
-    return [];
-  }, [data]);
-  
-  const totals = useMemo(() => {
-    const totalQty = chartData.reduce((sum, d) => sum + d.qty, 0);
-    const totalSales = chartData.reduce((sum, d) => sum + d.sales, 0);
-    return { qty: totalQty, sales: totalSales };
-  }, [chartData]);
-  
-  // אם אין נתונים
-  if (chartData.every(d => d.qty === 0)) {
-    return null;
-  }
-  
-  return (
-    <div className="bg-white rounded-2xl shadow-lg p-6 border">
-      <h3 className="text-lg font-bold mb-4">📊 {title}</h3>
-      
-      {/* טבלה */}
-      <div className="overflow-x-auto mb-6">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-gray-50">
-              <th className="px-2 py-2 text-right font-semibold text-gray-600 sticky right-0 bg-gray-50">מדד</th>
-              {chartData.map(d => (
-                <th key={d.monthKey} className="px-2 py-2 text-center font-medium text-gray-600 min-w-[50px]">{d.month}</th>
-              ))}
-              <th className="px-3 py-2 text-center font-bold text-gray-800 bg-blue-50">סה"כ</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr className="border-t">
-              <td className="px-2 py-2 font-medium text-gray-700 sticky right-0 bg-white">מחזור ₪</td>
-              {chartData.map(d => (
-                <td key={d.monthKey} className="px-2 py-2 text-center text-gray-600">
-                  {d.sales >= 1000 ? (d.sales / 1000).toFixed(0) + 'K' : d.sales.toFixed(0)}
-                </td>
-              ))}
-              <td className="px-3 py-2 text-center font-bold text-blue-600 bg-blue-50">
-                ₪{totals.sales >= 1000000 ? (totals.sales / 1000000).toFixed(1) + 'M' : totals.sales >= 1000 ? (totals.sales / 1000).toFixed(0) + 'K' : totals.sales.toFixed(0)}
-              </td>
-            </tr>
-            <tr className="border-t bg-gray-50">
-              <td className="px-2 py-2 font-medium text-gray-700 sticky right-0 bg-gray-50">פריטים</td>
-              {chartData.map(d => (
-                <td key={d.monthKey} className="px-2 py-2 text-center text-gray-600">
-                  {fmt(d.qty)}
-                </td>
-              ))}
-              <td className="px-3 py-2 text-center font-bold text-emerald-600 bg-blue-50">
-                {fmt(totals.qty)}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      
-      {/* גרף משולב - עמודות + קו */}
-      <ResponsiveContainer width="100%" height={280}>
-        <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-          <YAxis 
-            yAxisId="left" 
-            orientation="right" 
-            tick={{ fontSize: 10 }} 
-            tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0) + 'K' : v}
-            label={{ value: '₪ מחזור', angle: 90, position: 'insideRight', fontSize: 10 }}
-          />
-          <YAxis 
-            yAxisId="right" 
-            orientation="left" 
-            tick={{ fontSize: 10 }}
-            tickFormatter={v => v >= 1000 ? (v/1000).toFixed(0) + 'K' : v}
-            label={{ value: 'פריטים', angle: -90, position: 'insideLeft', fontSize: 10 }}
-          />
-          <Tooltip 
-            formatter={(value, name) => [
-              name === 'sales' ? '₪' + fmt(value) : fmt(value),
-              name === 'sales' ? 'מחזור' : 'פריטים'
-            ]}
-            labelFormatter={(label) => `חודש: ${label}`}
-          />
-          <Legend 
-            formatter={(value) => value === 'sales' ? 'מחזור ₪' : 'פריטים'}
-          />
-          <Bar yAxisId="left" dataKey="sales" fill="#3b82f6" name="sales" radius={[4, 4, 0, 0]} />
-          <Line yAxisId="right" type="monotone" dataKey="qty" stroke="#10b981" strokeWidth={3} dot={{ fill: '#10b981', r: 4 }} name="qty" />
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  );
-};
-
 const exportPDF = title => { document.title = title; window.print(); };
 const exportCSV = (data, columns, filename) => {
   const header = columns.map(c => c.l.replace(/\n/g, ' ')).join(',');
@@ -786,11 +1192,35 @@ const exportCSV = (data, columns, filename) => {
 };
 
 // Table with sticky first column, 100 rows, and improved horizontal scroll
-const Table = ({ data, cols, onRow, name = 'data', compact = false }) => {
-  const [sort, setSort] = useState({ k: null, d: 'desc' });
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
+// v1.8.8 - Added support for controlled search/page from parent
+const Table = ({ data, cols, onRow, name = 'data', compact = false, defaultSort = 'qty_total', search: controlledSearch, onSearchChange, page: controlledPage, onPageChange, summaryRow = null, periodSelector = null }) => {
+  const [internalSort, setInternalSort] = useState({ k: defaultSort, d: 'desc' });
+  const [internalSearch, setInternalSearch] = useState('');
+  const [internalPage, setInternalPage] = useState(1);
   const scrollRef = React.useRef(null);
+  
+  // Use controlled values if provided, otherwise use internal state
+  const search = controlledSearch !== undefined ? controlledSearch : internalSearch;
+  const page = controlledPage !== undefined ? controlledPage : internalPage;
+  const sort = internalSort;
+  
+  const handleSearchChange = (value) => {
+    if (onSearchChange) {
+      onSearchChange(value);
+    } else {
+      setInternalSearch(value);
+      setInternalPage(1);
+    }
+  };
+  
+  const handlePageChange = (value) => {
+    if (onPageChange) {
+      onPageChange(value);
+    } else {
+      setInternalPage(value);
+    }
+  };
+  
   const perPage = 100;
   const filtered = useMemo(() => {
     let r = data.filter(i => Object.values(i).some(v => String(v).toLowerCase().includes(search.toLowerCase())));
@@ -805,7 +1235,10 @@ const Table = ({ data, cols, onRow, name = 'data', compact = false }) => {
   
   return (<div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden w-full">
     <div className="p-3 border-b flex flex-wrap gap-2 items-center justify-between print:hidden">
-      <div className="relative flex-1 min-w-48"><Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} /><input type="text" placeholder="חיפוש..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="w-full pr-10 pl-4 py-2 border rounded-xl text-sm" /></div>
+      <div className="flex items-center gap-3 flex-1">
+        <div className="relative flex-1 min-w-48"><Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} /><input type="text" placeholder="חיפוש..." value={search} onChange={e => handleSearchChange(e.target.value)} className="w-full pr-10 pl-4 py-2 border rounded-xl text-sm" /></div>
+        {periodSelector && <div className="flex items-center gap-2"><span className="text-sm text-gray-600">תקופה:</span>{periodSelector}</div>}
+      </div>
       <button onClick={() => exportCSV(filtered, cols, name)} className="flex items-center gap-1 px-3 py-2 bg-emerald-500 text-white rounded-xl text-sm"><Download size={16}/>Excel</button>
     </div>
     {/* Scroll arrows for mobile - outside the scroll container */}
@@ -817,9 +1250,19 @@ const Table = ({ data, cols, onRow, name = 'data', compact = false }) => {
         <ChevronRight size={24} className="text-white" />
       </button>
       <div ref={scrollRef} className="overflow-x-auto max-h-[600px] overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
-        <table className="w-full min-w-max">
+        <table className="w-full min-w-max main-table">
           <thead className="bg-gray-50 sticky top-0 z-20">
-            <tr>{cols.map((c, idx) => <th key={c.k} onClick={() => setSort(p => ({ k: c.k, d: p.k === c.k && p.d === 'desc' ? 'asc' : 'desc' }))} className={`px-3 py-3 text-right text-xs font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 whitespace-pre-line bg-gray-50 ${idx === 0 ? 'sticky right-0 z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]' : ''}`}><span className="flex items-center gap-1">{c.t && <Tip text={c.t} />}{c.l}{sort.k === c.k && <span className="text-blue-500 mr-1">{sort.d === 'asc' ? '↑' : '↓'}</span>}</span></th>)}</tr>
+            <tr>{cols.map((c, idx) => <th key={c.k} onClick={() => setInternalSort(p => ({ k: c.k, d: p.k === c.k && p.d === 'desc' ? 'asc' : 'desc' }))} className={`px-3 py-3 text-right text-xs font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 whitespace-pre-line bg-gray-50 ${idx === 0 ? 'sticky right-0 z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]' : ''}`}><span className="flex items-center gap-1">{c.t && <Tip text={c.t} />}{c.l}{sort.k === c.k && <span className="text-blue-500 mr-1">{sort.d === 'asc' ? '↑' : '↓'}</span>}</span></th>)}</tr>
+            {/* Summary Row */}
+            {summaryRow && (
+              <tr className="bg-blue-50 border-b-2 border-blue-200">
+                {summaryRow.map((cell, idx) => (
+                  <td key={idx} className={`px-3 py-2 text-sm font-bold ${idx === 0 ? 'sticky right-0 z-30 bg-blue-50 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]' : ''} ${cell.className || ''}`}>
+                    {cell.value}
+                  </td>
+                ))}
+              </tr>
+            )}
           </thead>
           <tbody className="divide-y">{rows.map((r, i) => <tr key={r.id || i} onClick={() => onRow && onRow(r)} className={'hover:bg-blue-50 ' + (onRow ? 'cursor-pointer' : '')}>{cols.map((c, idx) => <td key={c.k} className={`px-3 text-sm ${idx === 0 ? 'sticky right-0 bg-white z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] max-w-[140px] sm:max-w-none' : 'whitespace-nowrap'} ${compact ? 'py-2' : 'py-3'}`}>{c.r ? c.r(r[c.k], r) : r[c.k]}</td>)}</tr>)}</tbody>
         </table>
@@ -827,22 +1270,35 @@ const Table = ({ data, cols, onRow, name = 'data', compact = false }) => {
     </div>
     <div className="p-3 border-t bg-gray-50 flex items-center justify-between text-sm print:hidden">
       <span>{filtered.length} רשומות</span>
-      <div className="flex gap-2"><button onClick={() => setPage(p => Math.max(1, p-1))} disabled={page === 1} className="px-3 py-1 border rounded disabled:opacity-50">הקודם</button><span>{page}/{pages || 1}</span><button onClick={() => setPage(p => Math.min(pages, p+1))} disabled={page === pages} className="px-3 py-1 border rounded disabled:opacity-50">הבא</button></div>
+      <div className="flex gap-2"><button onClick={() => handlePageChange(Math.max(1, page-1))} disabled={page === 1} className="px-3 py-1 border rounded disabled:opacity-50">הקודם</button><span>{page}/{pages || 1}</span><button onClick={() => handlePageChange(Math.min(pages, page+1))} disabled={page === pages} className="px-3 py-1 border rounded disabled:opacity-50">הבא</button></div>
     </div>
   </div>)
 };
 
 const Overview = ({ stores, products, onNav, onDrillDown }) => {
+  const [selectedCity, setSelectedCity] = useState(null);
+  
   const st = useMemo(() => {
-    const active = stores.filter(s => !s.is_inactive);
+    // v1.8.9 - stores is already filtered for active only
+    const active = stores;
     const q24 = stores.reduce((s, x) => s + (x.qty_2024 || 0), 0);
     const q25 = stores.reduce((s, x) => s + (x.qty_2025 || 0), 0);
     const ql6 = stores.reduce((s, x) => s + (x.qty_last6 || 0), 0);
     const qp6 = stores.reduce((s, x) => s + (x.qty_prev6 || 0), 0);
     const s24 = stores.reduce((s, x) => s + (x.sales_2024 || 0), 0);
     const s25 = stores.reduce((s, x) => s + (x.sales_2025 || 0), 0);
-    const sl6 = stores.reduce((s, x) => s + (x.sales_last6 || 0), 0);
-    const sp6 = stores.reduce((s, x) => s + (x.sales_prev6 || 0), 0);
+    
+    // v1.8.9 - Calculate H1/H2 sales from monthly_sales
+    const h1Months = ['202501', '202502', '202503', '202504', '202505', '202506'];
+    const h2Months = ['202507', '202508', '202509', '202510', '202511', '202512'];
+    let sl6 = 0, sp6 = 0;
+    stores.forEach(x => {
+      if (x.monthly_sales) {
+        h1Months.forEach(m => { sp6 += x.monthly_sales[m] || 0; });
+        h2Months.forEach(m => { sl6 += x.monthly_sales[m] || 0; });
+      }
+    });
+    
     const yoy_qty = q24 > 0 ? ((q25 - q24) / q24) * 100 : 0;
     const yoy_sales = s24 > 0 ? ((s25 - s24) / s24) * 100 : 0;
     const hoh_qty = qp6 > 0 ? ((ql6 - qp6) / qp6) * 100 : 0;
@@ -853,9 +1309,9 @@ const Overview = ({ stores, products, onNav, onDrillDown }) => {
     const scShort = {}; stores.forEach(s => { const st = s.status_short || 'יציב'; scShort[st] = (scShort[st] || 0) + 1; });
     const top = [...stores].sort((a, b) => (b.qty_total || 0) - (a.qty_total || 0)).slice(0, 20);
     const bot = [...active].sort((a, b) => (a.metric_12v12 || 0) - (b.metric_12v12 || 0)).slice(0, 20);
-    const alerts = stores.filter(s => !s.is_inactive && (s.status_long === 'התרסקות' || s.status_long === 'ירידה')).length;
+    const alerts = stores.filter(s => s.status_long === 'התרסקות' || s.status_long === 'ירידה').length;
     
-    // v1.8 - Fallback count
+    // v1.7 - Fallback count
     const fallbackCount = stores.filter(s => s.is_fallback).length;
     
     // v1.4 - City sales breakdown (H2 - last 6 months)
@@ -876,13 +1332,13 @@ const Overview = ({ stores, products, onNav, onDrillDown }) => {
     return { active: active.length, total: stores.length, q24, q25, ql6, qp6, s24, s25, sl6, sp6, yoy_qty, yoy_sales, hoh_qty, hoh_sales, scLong, scShort, top, bot, alerts, citySales, fallbackCount };
   }, [stores]);
   
-  // Colors for 5 statuses
+  // Colors for 5 statuses - v1.10.7 more distinct colors
   const STATUS_COLORS = { 
-    'עליה חדה': '#059669', 
-    'צמיחה': '#10b981', 
-    'יציב': '#3b82f6', 
-    'ירידה': '#f97316', 
-    'התרסקות': '#dc2626' 
+    'עליה חדה': '#7c3aed',  // Purple - very distinct
+    'צמיחה': '#10b981',      // Emerald green
+    'יציב': '#3b82f6',       // Blue
+    'ירידה': '#f59e0b',      // Amber/Orange
+    'התרסקות': '#ef4444'     // Red
   };
   const pieLong = Object.entries(st.scLong).map(([n, v]) => ({ name: n, value: v, color: STATUS_COLORS[n] || '#6b7280' }));
   
@@ -896,10 +1352,24 @@ const Overview = ({ stores, products, onNav, onDrillDown }) => {
   return (<div className="space-y-6">
     <div className="flex justify-between items-center"><h2 className="text-xl font-bold">סקירה כללית</h2><button onClick={() => exportPDF('סקירה כללית - Baron')} className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl text-sm print:hidden"><FileText size={16}/>PDF</button></div>
     <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-      <Card title="סה״כ חנויות" value={fmt(st.total)} sub={st.active + ' פעילות'} icon={Store} color="blue" />
+      <Card title="חנויות פעילות" value={fmt(st.total)} sub="מוצגות בנתונים" icon={Store} color="blue" />
       <Card title="סה״כ כמות (2024-2025)" value={fmt(st.q24 + st.q25)} trend={st.yoy_qty} icon={TrendingUp} color="green" />
       <Card title="מוצרים פעילים" value={products.filter(p => !p.is_inactive).length} sub={'מתוך ' + products.length} icon={Package} color="purple" />
-      <Card title="התראות" value={st.alerts} sub="דורשות טיפול" icon={AlertTriangle} color="red" />
+      <div 
+        onClick={() => onDrillDown && onDrillDown({ type: 'alerts' })}
+        className="bg-white rounded-2xl shadow-lg p-4 border border-red-200 hover:border-red-400 cursor-pointer transition-colors"
+      >
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-gray-500 text-sm">התראות</p>
+            <p className="text-2xl font-bold text-red-600 mt-1">{st.alerts}</p>
+            <p className="text-gray-400 text-xs mt-1">דורשות טיפול</p>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center text-white">
+            <AlertTriangle size={20} />
+          </div>
+        </div>
+      </div>
       <div 
         onClick={() => onDrillDown && onDrillDown({ type: 'fallback' })}
         className="bg-white rounded-2xl shadow-lg p-4 border border-yellow-200 hover:border-yellow-400 cursor-pointer transition-colors"
@@ -939,18 +1409,29 @@ const Overview = ({ stores, products, onNav, onDrillDown }) => {
       </div>
     </div>
     
-    {/* v1.8 - Monthly Sales Chart - מיד אחרי ההשוואות */}
-    <MonthlySalesChart data={stores} title="מכירות חודשיות 2025 - כל החנויות" />
+    {/* Monthly Sales Table and Chart */}
+    <MonthlySalesChart data={stores} title="מכירות חודשיות - כל החנויות" />
     
     {/* Single status pie chart with 5 statuses */}
     <div className="bg-white rounded-2xl shadow-lg p-6 border">
       <h3 className="text-lg font-bold mb-2">📊 התפלגות סטטוסים</h3>
-      <p className="text-xs text-gray-500 mb-4">מבוסס על מערכת חוקים (12v12, 6v6, 3v3)</p>
+      <p className="text-xs text-gray-500 mb-4">מבוסס על מערכת חוקים (12v12, 6v6, 3v3) - לחץ על חלק בעוגה לצפייה בחנויות</p>
       <div className="flex flex-col lg:flex-row items-center gap-6">
         <ResponsiveContainer width="100%" height={280}>
           <PieChart>
-            <Pie data={pieLong} cx="50%" cy="50%" innerRadius={50} outerRadius={90} dataKey="value" label={renderLabel} labelLine={true}>
-              {pieLong.map((e, i) => <Cell key={i} fill={e.color} />)}
+            <Pie 
+              data={pieLong} 
+              cx="50%" 
+              cy="50%" 
+              innerRadius={50} 
+              outerRadius={90} 
+              dataKey="value" 
+              label={renderLabel} 
+              labelLine={true}
+              style={{ cursor: 'pointer' }}
+              onClick={(data) => onDrillDown && onDrillDown({ type: 'status_long', value: data.name })}
+            >
+              {pieLong.map((e, i) => <Cell key={i} fill={e.color} style={{ cursor: 'pointer' }} />)}
             </Pie>
             <Tooltip formatter={v => fmt(v) + ' חנויות'} />
           </PieChart>
@@ -981,13 +1462,13 @@ const Overview = ({ stores, products, onNav, onDrillDown }) => {
     {/* v1.4 - City Sales H2 */}
     <div className="bg-white rounded-2xl shadow-lg p-6 border">
       <h3 className="text-lg font-bold mb-2">🏙️ מכירות לפי ערים</h3>
-      <p className="text-xs text-gray-500 mb-4">H2 2025 (יול-דצמ) | השוואה ל-H1 (ינו-יונ)</p>
+      <p className="text-xs text-gray-500 mb-4">H2 2025 (יול-דצמ) | לחץ על עיר להשוואה מפורטת</p>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
         {st.citySales.map((city, i) => (
           <div 
             key={city.name} 
-            onClick={() => onDrillDown && onDrillDown({ type: 'city', value: city.name })}
-            className="bg-gray-50 rounded-xl p-3 hover:bg-blue-50 cursor-pointer transition-colors border"
+            onClick={() => setSelectedCity(city.name)}
+            className="bg-gray-50 rounded-xl p-3 hover:bg-blue-50 cursor-pointer transition-colors border hover:border-blue-300"
           >
             <div className="flex items-center gap-2 mb-2">
               <span className="w-5 h-5 flex items-center justify-center bg-teal-500 text-white rounded text-xs font-bold">{i+1}</span>
@@ -1002,47 +1483,40 @@ const Overview = ({ stores, products, onNav, onDrillDown }) => {
         ))}
       </div>
     </div>
+    
+    {/* City Comparison Modal */}
+    {selectedCity && (
+      <CityComparisonModal 
+        city={selectedCity}
+        stores={stores.filter(s => (s.city || '').trim() === selectedCity)}
+        currentStoreId={null}
+        onClose={() => setSelectedCity(null)}
+        onSelectStore={(store) => { setSelectedCity(null); onNav('store', store); }}
+      />
+    )}
   </div>);
 };
 
-const StoresList = ({ stores, onSelect, initialFilter }) => {
-  const [cities, setCities] = useState([]);
-  const [networks, setNetworks] = useState([]);
-  const [drivers, setDrivers] = useState([]);
-  const [agents, setAgents] = useState([]);
-  const [statusesLong, setStatusesLong] = useState([]);
-  const [statusesShort, setStatusesShort] = useState([]);
-  const [minQty, setMinQty] = useState(0);
-  const [showF, setShowF] = useState(false);
-  const [fallbackFilter, setFallbackFilter] = useState('all'); // 'all', 'fallback', 'regular'
+const StoresList = ({ stores, onSelect, filters, onFiltersChange }) => {
+  // v1.8.8 - Use controlled filters from parent for history preservation
+  const { cities, networks, drivers, agents, statusesLong, statusesShort, minQty, fallbackFilter, search: tableSearch, page: tablePage } = filters;
+  const [showF, setShowF] = useState(cities.length > 0 || networks.length > 0 || drivers.length > 0 || agents.length > 0 || statusesLong.length > 0 || statusesShort.length > 0 || fallbackFilter !== 'all');
   
-  // v1.3 - Apply initial filter from drill-down
-  useEffect(() => {
-    if (initialFilter) {
-      if (initialFilter.type === 'city') {
-        setCities([initialFilter.value]);
-        setShowF(true);
-      } else if (initialFilter.type === 'status_long') {
-        setStatusesLong([initialFilter.value]);
-        setShowF(true);
-      } else if (initialFilter.type === 'status_short') {
-        setStatusesShort([initialFilter.value]);
-        setShowF(true);
-      } else if (initialFilter.type === 'driver') {
-        setDrivers([initialFilter.value]);
-        setShowF(true);
-      } else if (initialFilter.type === 'network') {
-        setNetworks([initialFilter.value]);
-        setShowF(true);
-      } else if (initialFilter.type === 'agent') {
-        setAgents([initialFilter.value]);
-        setShowF(true);
-      } else if (initialFilter.type === 'fallback') {
-        setFallbackFilter('fallback');
-        setShowF(true);
-      }
-    }
-  }, [initialFilter]);
+  // v1.10.7 - Table view tabs and comparison
+  const [tableView, setTableView] = useState('metrics'); // 'metrics' or 'data'
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [showComparison, setShowComparison] = useState(false);
+  const [compSearchTerm, setCompSearchTerm] = useState('');
+  
+  // v1.10.8 - Period selection for data tables
+  const [dataPeriod, setDataPeriod] = useState('h2_2025');
+  const [compDataPeriod, setCompDataPeriod] = useState('h2_2025');
+  const printRef = useRef(null);
+  
+  // Helper to update a single filter
+  const updateFilter = (key, value) => {
+    onFiltersChange({ ...filters, [key]: value, page: key !== 'page' ? 1 : value });
+  };
   
   const filtered = useMemo(() => stores.filter(s => {
     if (cities.length && !cities.includes(s.city)) return false;
@@ -1057,58 +1531,1265 @@ const StoresList = ({ stores, onSelect, initialFilter }) => {
     return true;
   }), [stores, cities, networks, drivers, agents, statusesLong, statusesShort, minQty, fallbackFilter]);
   
-  const cols = [
+  // v1.10.8 - Calculate data for main table based on selected period
+  const storesWithData = useMemo(() => filtered.map(s => calcStoreDataForPeriod(s, dataPeriod)), [filtered, dataPeriod]);
+  
+  // v1.10.8 - Calculate data for comparison modal based on its period
+  const storesWithCompData = useMemo(() => stores.map(s => calcStoreDataForPeriod(s, compDataPeriod)), [stores, compDataPeriod]);
+  
+  // Calculate summary values
+  const summaryData = useMemo(() => {
+    const count = filtered.length;
+    if (count === 0) return null;
+    const avg12v12 = filtered.reduce((s, x) => s + (x.metric_12v12 || 0), 0) / count;
+    const avg3v3 = filtered.reduce((s, x) => s + (x.metric_3v3 || 0), 0) / count;
+    const avg6v6 = filtered.reduce((s, x) => s + (x.metric_6v6 || 0), 0) / count;
+    const avg2v2 = filtered.reduce((s, x) => s + (x.metric_2v2 || 0), 0) / count;
+    const avgPeak = filtered.reduce((s, x) => s + (x.metric_peak_distance || 0), 0) / count;
+    const avgReturns = filtered.reduce((s, x) => s + (x.returns_pct_last6 || 0), 0) / count;
+    const totalQty = filtered.reduce((s, x) => s + (x.qty_total || 0), 0);
+    return { count, avg12v12, avg3v3, avg6v6, avg2v2, avgPeak, avgReturns, totalQty };
+  }, [filtered]);
+  
+  // v1.10.8 - Data table summary
+  const dataSummary = useMemo(() => {
+    const count = storesWithData.length;
+    if (count === 0) return null;
+    const totalGross = storesWithData.reduce((s, x) => s + x.period_gross, 0);
+    const totalNet = storesWithData.reduce((s, x) => s + x.period_net, 0);
+    const totalReturns = storesWithData.reduce((s, x) => s + x.period_returns, 0);
+    const totalDeliveries = storesWithData.reduce((s, x) => s + x.period_deliveries, 0);
+    const avgReturnsPct = totalGross > 0 ? (totalReturns / totalGross * 100) : 0;
+    const avgPerDelivery = totalDeliveries > 0 ? (totalNet / totalDeliveries) : 0;
+    return { count, totalGross, totalNet, totalReturns, totalDeliveries, avgReturnsPct, avgPerDelivery };
+  }, [storesWithData]);
+  
+  // Toggle store selection
+  const toggleSelect = (id, e) => {
+    e && e.stopPropagation();
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  
+  const clearSelection = () => setSelectedIds(new Set());
+  
+  // Search for comparison
+  const compSearchResults = compSearchTerm.length >= 2 
+    ? stores.filter(s => s.name.toLowerCase().includes(compSearchTerm.toLowerCase()) || s.city?.toLowerCase().includes(compSearchTerm.toLowerCase())).slice(0, 15)
+    : [];
+  
+  const selectedStores = stores.filter(s => selectedIds.has(s.id));
+  
+  // Metrics columns
+  const metricsCols = [
+    { k: 'select', l: '☑', r: (v, r) => <div onClick={e => { e.stopPropagation(); toggleSelect(r.id); }} className="w-10 h-10 flex items-center justify-center cursor-pointer hover:bg-blue-100 rounded-lg -m-2"><input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => {}} className="w-5 h-5 cursor-pointer pointer-events-none" /></div> },
     { k: 'name', l: 'חנות', r: (v, r) => <div className="min-w-[100px]"><p className="font-medium text-sm leading-tight">{v}</p><p className="text-xs text-gray-500">{r.city}</p></div> },
-    { k: 'status_long', l: 'סטטוס', r: (v, r) => <StatusBadge item={r} /> },
-    { k: 'metric_long_term', l: 'טווח ארוך', t: METRIC_TIPS['long_term'], r: (v) => <LongTermCell value={v} /> },
-    { k: 'metric_short_term', l: 'טווח קצר', t: METRIC_TIPS['short_term'], r: (v, r) => <ShortTermCell value={v} ok={r.short_term_ok} /> },
+    { k: 'status_long', l: 'סטטוס\nארוך', r: (v, r) => <LongTermBadge status={r.status_long || 'יציב'} isFallback={r.is_fallback} /> },
     { k: 'metric_12v12', l: 'שנתי\n24→25', t: METRIC_TIPS['12v12'], r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
-    { k: 'metric_6v6', l: '6 חודשים\nH1→H2', t: METRIC_TIPS['6v6'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev6} to={r.qty_last6} /> },
     { k: 'metric_3v3', l: '3 חודשים\n24→25', t: METRIC_TIPS['3v3'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev3} to={r.qty_last3} /> },
+    { k: 'metric_6v6', l: '6 חודשים\nH1→H2', t: METRIC_TIPS['6v6'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev6} to={r.qty_last6} /> },
     { k: 'metric_2v2', l: '2 חודשים\nספט→נוב', t: METRIC_TIPS['2v2'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev2} to={r.qty_last2} /> },
+    { k: 'status_short', l: 'סטטוס\nקצר', r: (v, r) => <ShortTermBadge status={r.status_short || 'יציב'} /> },
     { k: 'metric_peak_distance', l: 'מרחק מהשיא', t: METRIC_TIPS['peak'], r: (v, r) => <PeakCell pct={v} peak={r.peak_value} current={r.current_value} /> },
     { k: 'returns_pct_last6', l: 'חזרות %', t: METRIC_TIPS['returns'], r: (v, r) => <ReturnsCell pctL6={v} pctP6={r.returns_pct_prev6} change={r.returns_change} /> },
     { k: 'qty_total', l: 'כמות', r: v => <span className="font-bold">{fmt(v)}</span> },
   ];
   
+  // Data columns (dynamic period)
+  const dataCols = [
+    { k: 'select', l: '☑', r: (v, r) => <div onClick={e => { e.stopPropagation(); toggleSelect(r.id); }} className="w-10 h-10 flex items-center justify-center cursor-pointer hover:bg-purple-100 rounded-lg -m-2"><input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => {}} className="w-5 h-5 cursor-pointer pointer-events-none" /></div> },
+    { k: 'name', l: 'חנות', r: (v, r) => <div className="min-w-[100px]"><p className="font-medium text-sm leading-tight">{v}</p><p className="text-xs text-gray-500">{r.city}</p></div> },
+    { k: 'period_gross', l: 'ברוטו', r: v => <span className="font-medium text-blue-700">{fmt(v)}</span> },
+    { k: 'period_net', l: 'נטו', r: v => <span className="font-medium text-green-700">{fmt(v)}</span> },
+    { k: 'period_returns', l: 'חזרות', r: v => <span className="font-medium text-red-600">{fmt(v)}</span> },
+    { k: 'period_returns_pct', l: 'חזרות\n%', r: v => <span className={v > 20 ? 'text-red-600 font-bold' : v > 10 ? 'text-blue-600' : 'text-gray-600'}>{(v || 0).toFixed(1)}%</span> },
+    { k: 'period_deliveries', l: 'אספקות', r: v => <span className="font-medium text-violet-700">{fmt(v)}</span> },
+    { k: 'period_avg_per_delivery', l: 'ממוצע\nלאספקה', r: v => <span className="font-medium text-blue-700">{fmt(Math.round(v || 0))}</span> },
+  ];
+  
+  // Build summary rows
+  const metricsSummaryRow = summaryData ? [
+    { value: '', className: 'text-center' },
+    { value: <span className="text-blue-700">Σ סה״כ {summaryData.count} חנויות</span>, className: 'text-right' },
+    { value: '-', className: 'text-center text-gray-400' },
+    { value: <span className={summaryData.avg12v12 >= 0 ? 'text-emerald-600' : 'text-red-600'}>{fmtPct(summaryData.avg12v12)}</span>, className: 'text-center' },
+    { value: <span className={summaryData.avg3v3 >= 0 ? 'text-emerald-600' : 'text-red-600'}>{fmtPct(summaryData.avg3v3)}</span>, className: 'text-center' },
+    { value: <span className={summaryData.avg6v6 >= 0 ? 'text-emerald-600' : 'text-red-600'}>{fmtPct(summaryData.avg6v6)}</span>, className: 'text-center' },
+    { value: <span className={summaryData.avg2v2 >= 0 ? 'text-emerald-600' : 'text-red-600'}>{fmtPct(summaryData.avg2v2)}</span>, className: 'text-center' },
+    { value: '-', className: 'text-center text-gray-400' },
+    { value: <span className="text-red-600">{fmtPct(summaryData.avgPeak)}</span>, className: 'text-center' },
+    { value: <span className={summaryData.avgReturns > 15 ? 'text-red-600' : 'text-gray-700'}>{summaryData.avgReturns.toFixed(1)}%</span>, className: 'text-center' },
+    { value: <span className="font-bold text-blue-700">{fmt(summaryData.totalQty)}</span>, className: 'text-center' },
+  ] : null;
+  
+  const dataSummaryRow = dataSummary ? [
+    { value: '', className: 'text-center' },
+    { value: <span className="text-blue-700">Σ סה״כ {dataSummary.count} חנויות</span>, className: 'text-right' },
+    { value: <span className="font-bold text-blue-700">{fmt(dataSummary.totalGross)}</span>, className: 'text-center' },
+    { value: <span className="font-bold text-green-700">{fmt(dataSummary.totalNet)}</span>, className: 'text-center' },
+    { value: <span className="font-bold text-red-600">{fmt(dataSummary.totalReturns)}</span>, className: 'text-center' },
+    { value: <span className={dataSummary.avgReturnsPct > 15 ? 'text-red-600 font-bold' : 'text-gray-700'}>{dataSummary.avgReturnsPct.toFixed(1)}%</span>, className: 'text-center' },
+    { value: <span className="font-bold text-violet-700">{fmt(dataSummary.totalDeliveries)}</span>, className: 'text-center' },
+    { value: <span className="font-bold text-blue-700">{fmt(Math.round(dataSummary.avgPerDelivery))}</span>, className: 'text-center' },
+  ] : null;
+  
+  // Export functions
+  const exportMetricsCSV = () => {
+    const cols = [
+      { k: 'name', l: 'חנות' }, { k: 'city', l: 'עיר' }, { k: 'status_long', l: 'סטטוס ארוך' },
+      { k: 'metric_12v12', l: 'שנתי %' }, { k: 'metric_3v3', l: '3 חודשים %' }, { k: 'metric_6v6', l: '6 חודשים %' }, { k: 'metric_2v2', l: '2 חודשים %' },
+      { k: 'status_short', l: 'סטטוס קצר' }, { k: 'metric_peak_distance', l: 'מרחק מהשיא %' }, { k: 'returns_pct_last6', l: 'חזרות %' }, { k: 'qty_total', l: 'כמות' },
+    ];
+    exportCSV(filtered, cols, 'חנויות_מדדים');
+  };
+  
+  const exportDataCSV = () => {
+    const periodLabel = getPeriodLabel(dataPeriod).replace(/[()]/g, '');
+    const cols = [
+      { k: 'name', l: 'חנות' }, { k: 'city', l: 'עיר' },
+      { k: 'period_gross', l: 'ברוטו' }, { k: 'period_net', l: 'נטו' }, { k: 'period_returns', l: 'חזרות' },
+      { k: 'period_returns_pct', l: 'חזרות %' }, { k: 'period_deliveries', l: 'אספקות' }, { k: 'period_avg_per_delivery', l: 'ממוצע לאספקה' },
+    ];
+    exportCSV(storesWithData, cols, `חנויות_נתונים_${periodLabel}`);
+  };
+  
   return (<div className="space-y-4 w-full">
     <div className="flex items-center justify-between flex-wrap gap-2">
       <h2 className="text-xl font-bold">חנויות ({filtered.length})</h2>
       <div className="flex gap-2 print:hidden">
+        {selectedIds.size > 0 && (
+          <button onClick={() => setShowComparison(true)} className="flex items-center gap-1 px-3 py-2 bg-emerald-500 text-white rounded-xl text-sm hover:bg-emerald-600">
+            <BarChart3 size={16} />השווה ({selectedIds.size})
+          </button>
+        )}
         <button onClick={() => exportPDF('חנויות - Baron')} className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl text-sm"><FileText size={16}/>PDF</button>
+        <button onClick={tableView === 'metrics' ? exportMetricsCSV : exportDataCSV} className="flex items-center gap-1 px-3 py-2 bg-emerald-500 text-white rounded-xl text-sm"><Download size={16}/>Excel</button>
         <button onClick={() => setShowF(!showF)} className={'flex items-center gap-2 px-4 py-2 rounded-xl ' + (showF ? 'bg-blue-500 text-white' : 'bg-gray-100')}><Filter size={18}/>סינון</button>
       </div>
     </div>
+    
+    {/* v1.10.7 - Table View Tabs */}
+    <div className="flex gap-2 print:hidden">
+      <button 
+        onClick={() => setTableView('metrics')}
+        className={`px-4 py-2 rounded-xl font-medium transition-colors ${tableView === 'metrics' ? 'bg-blue-500 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}
+      >
+        📊 מדדים
+      </button>
+      <button 
+        onClick={() => setTableView('data')}
+        className={`px-4 py-2 rounded-xl font-medium transition-colors ${tableView === 'data' ? 'bg-purple-500 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}
+      >
+        📈 נתונים (H2)
+      </button>
+      {selectedIds.size > 0 && (
+        <button onClick={clearSelection} className="mr-auto text-sm text-red-600 hover:text-red-800 flex items-center gap-1">
+          <X size={14} /> נקה בחירה ({selectedIds.size})
+        </button>
+      )}
+    </div>
+    
     {showF && <div className="bg-white rounded-xl shadow p-4 print:hidden">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-        <MultiSelect label="עיר" opts={FILTERS.cities || []} selected={cities} onChange={setCities} />
-        <MultiSelect label="רשת" opts={FILTERS.networks || []} selected={networks} onChange={setNetworks} />
-        <MultiSelect label="נהג" opts={FILTERS.drivers || []} selected={drivers} onChange={setDrivers} />
-        <MultiSelect label="סוכן" opts={FILTERS.agents || []} selected={agents} onChange={setAgents} />
+        <MultiSelect label="עיר" opts={FILTERS.cities || []} selected={cities} onChange={(v) => updateFilter('cities', v)} />
+        <MultiSelect label="רשת" opts={FILTERS.networks || []} selected={networks} onChange={(v) => updateFilter('networks', v)} />
+        <MultiSelect label="נהג" opts={FILTERS.drivers || []} selected={drivers} onChange={(v) => updateFilter('drivers', v)} />
+        <MultiSelect label="סוכן" opts={FILTERS.agents || []} selected={agents} onChange={(v) => updateFilter('agents', v)} />
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <MultiSelect label="סטטוס טווח ארוך" opts={['עליה חדה','צמיחה','יציב','ירידה','התרסקות']} selected={statusesLong} onChange={setStatusesLong} />
-        <MultiSelect label="סטטוס טווח קצר" opts={['עליה חדה','יציב','ירידה','אזעקה']} selected={statusesShort} onChange={setStatusesShort} />
+        <MultiSelect label="סטטוס טווח ארוך" opts={['עליה חדה','צמיחה','יציב','ירידה','התרסקות']} selected={statusesLong} onChange={(v) => updateFilter('statusesLong', v)} />
+        <MultiSelect label="סטטוס טווח קצר" opts={['עליה חדה','יציב','ירידה','אזעקה']} selected={statusesShort} onChange={(v) => updateFilter('statusesShort', v)} />
         <div>
           <label className="text-xs text-gray-600 block mb-1">סוג סטטוס</label>
-          <select value={fallbackFilter} onChange={e => setFallbackFilter(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm">
+          <select value={fallbackFilter} onChange={e => updateFilter('fallbackFilter', e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm">
             <option value="all">הכל</option>
             <option value="regular">רגיל בלבד</option>
             <option value="fallback">⚠️ גיבוי בלבד</option>
           </select>
         </div>
-        <div><label className="text-xs text-gray-600 block mb-1">מינימום פריטים</label><input type="number" value={minQty || ''} onChange={e => setMinQty(Number(e.target.value) || 0)} placeholder="0" className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" /></div>
+        <div><label className="text-xs text-gray-600 block mb-1">מינימום פריטים</label><input type="number" value={minQty || ''} onChange={e => updateFilter('minQty', Number(e.target.value) || 0)} placeholder="0" className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" /></div>
       </div>
     </div>}
-    <Table data={filtered} cols={cols} onRow={onSelect} name="stores" />
+    
+    {/* Table based on view selection */}
+    {tableView === 'metrics' ? (
+      <Table data={filtered} cols={metricsCols} onRow={onSelect} name="stores_metrics" search={tableSearch} onSearchChange={(v) => updateFilter('search', v)} page={tablePage} onPageChange={(v) => updateFilter('page', v)} summaryRow={metricsSummaryRow} />
+    ) : (
+      <Table data={storesWithData} cols={dataCols} onRow={onSelect} name="stores_data" search={tableSearch} onSearchChange={(v) => updateFilter('search', v)} page={tablePage} onPageChange={(v) => updateFilter('page', v)} summaryRow={dataSummaryRow} periodSelector={<PeriodSelector value={dataPeriod} onChange={setDataPeriod} />} />
+    )}
+    
+    {/* v1.10.8 - Comparison Modal - with period selector, PDF export, and numbers in metrics */}
+    {showComparison && selectedIds.size > 0 && (
+      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-2 md:p-4" onClick={() => setShowComparison(false)}>
+        <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+          {/* Header */}
+          <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-4 flex justify-between items-center print:hidden">
+            <div className="flex items-center gap-3">
+              <BarChart3 size={24} />
+              <h2 className="text-lg md:text-xl font-bold">השוואת חנויות נבחרות</h2>
+              <span className="bg-white/20 px-3 py-1 rounded-full text-sm">{selectedIds.size} חנויות</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={clearSelection} className="px-3 py-1 bg-white/20 rounded-lg text-sm hover:bg-white/30">נקה הכל</button>
+              <button onClick={() => setShowComparison(false)} className="p-2 hover:bg-white/20 rounded-full"><X size={24} /></button>
+            </div>
+          </div>
+          
+          {/* Search to add more */}
+          <div className="p-4 border-b bg-gray-50 print:hidden">
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex-1 min-w-[200px] relative">
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  value={compSearchTerm}
+                  onChange={e => setCompSearchTerm(e.target.value)}
+                  placeholder="הוסף חנויות... (הקלד 2 תווים לחיפוש)"
+                  className="w-full pr-10 pl-4 py-2 border rounded-xl focus:ring-2 focus:ring-emerald-500"
+                />
+                {compSearchResults.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto z-10">
+                    {compSearchResults.map(s => (
+                      <button
+                        key={s.id}
+                        onClick={() => { toggleSelect(s.id); setCompSearchTerm(''); }}
+                        className={`w-full text-right px-3 py-2 hover:bg-emerald-50 flex justify-between border-b ${selectedIds.has(s.id) ? 'bg-emerald-100' : ''}`}
+                      >
+                        <span className="font-medium">{s.name}</span>
+                        <span className="text-sm text-gray-500">{s.city}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <button onClick={() => {
+                  const content = printRef.current;
+                  if (!content) return;
+                  const printWindow = window.open('', '_blank');
+                  printWindow.document.write(`
+                    <html dir="rtl">
+                    <head>
+                      <title>השוואת חנויות נבחרות - Baron</title>
+                      <style>
+                        * { box-sizing: border-box; font-family: Arial, sans-serif; }
+                        body { padding: 20px; direction: rtl; }
+                        h2 { color: #1e40af; margin: 20px 0 10px; font-size: 18px; }
+                        h3 { color: #6b21a8; margin: 20px 0 10px; font-size: 16px; }
+                        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11px; page-break-inside: auto; }
+                        th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: center; }
+                        th { background: #f3f4f6; font-weight: bold; }
+                        tr { page-break-inside: avoid; }
+                        .text-right { text-align: right; }
+                        .text-emerald { color: #059669; }
+                        .text-red { color: #dc2626; }
+                        .text-blue { color: #2563eb; }
+                        .text-green { color: #16a34a; }
+                        .text-purple { color: #7c3aed; }
+                        .text-amber { color: #d97706; }
+                        .summary-row { background: #dbeafe; font-weight: bold; }
+                        .summary-row-data { background: #f3e8ff; font-weight: bold; }
+                        .small { font-size: 9px; color: #666; }
+                        @media print { 
+                          @page { margin: 1cm; size: landscape; }
+                          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                        }
+                      </style>
+                    </head>
+                    <body>
+                      <h1 style="text-align:center;color:#1f2937;">השוואת חנויות נבחרות - Baron</h1>
+                      <p style="text-align:center;color:#666;margin-bottom:20px;">${selectedStores.length} חנויות | ${new Date().toLocaleDateString('he-IL')}</p>
+                      ${content.innerHTML}
+                    </body>
+                    </html>
+                  `);
+                  printWindow.document.close();
+                  printWindow.focus();
+                  setTimeout(() => { printWindow.print(); printWindow.close(); }, 250);
+                }} className="flex items-center gap-1 px-3 py-2 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600">
+                  <FileText size={16} />PDF
+                </button>
+                <button onClick={exportMetricsCSV} className="flex items-center gap-1 px-3 py-2 bg-emerald-500 text-white rounded-lg text-sm hover:bg-emerald-600">
+                  <Download size={16} />מדדים
+                </button>
+                <button onClick={exportDataCSV} className="flex items-center gap-1 px-3 py-2 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600">
+                  <Download size={16} />נתונים
+                </button>
+              </div>
+            </div>
+            {/* Selected chips */}
+            <div className="flex flex-wrap gap-2 mt-3">
+              {selectedStores.map(s => (
+                <span key={s.id} className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-100 text-emerald-800 rounded-full text-sm">
+                  {s.name}
+                  <button onClick={(e) => toggleSelect(s.id, e)} className="hover:text-red-600"><X size={14} /></button>
+                </span>
+              ))}
+            </div>
+          </div>
+          
+          {/* Tables */}
+          <div ref={printRef} className="p-4 overflow-y-auto max-h-[calc(95vh-250px)] space-y-6">
+            {/* Metrics Table */}
+            <div>
+              <h3 className="text-lg font-bold mb-3 text-blue-700 flex items-center gap-2 print:text-black"><TrendingUp size={20} className="print:hidden" />מדדים</h3>
+              <div className="overflow-x-auto border rounded-xl print:border-0">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-blue-50">
+                      <th className="p-2 text-right border-b">#</th>
+                      <th className="p-2 text-right border-b">חנות</th>
+                      <th className="p-2 text-center border-b">סטטוס ארוך</th>
+                      <th className="p-2 text-center border-b">שנתי<br/>24→25</th>
+                      <th className="p-2 text-center border-b">3 חודשים<br/>24→25</th>
+                      <th className="p-2 text-center border-b">6 חודשים<br/>H1→H2</th>
+                      <th className="p-2 text-center border-b">2 חודשים<br/>ספט→נוב</th>
+                      <th className="p-2 text-center border-b">סטטוס קצר</th>
+                      <th className="p-2 text-center border-b">כמות</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...selectedStores].sort((a, b) => (b.metric_12v12 || 0) - (a.metric_12v12 || 0)).map((s, i) => (
+                      <tr key={s.id} onClick={() => { setShowComparison(false); onSelect(s); }} className="hover:bg-blue-50 cursor-pointer border-b">
+                        <td className="p-2 font-bold text-center">{i + 1}</td>
+                        <td className="p-2 text-right"><div className="font-medium">{s.name}</div><div className="text-xs text-gray-500 small">{s.city}</div></td>
+                        <td className="p-2 text-center"><LongTermBadge status={s.status_long || 'יציב'} sm /></td>
+                        <td className="p-2 text-center">
+                          <div className={`font-medium ${(s.metric_12v12 || 0) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}`}>{fmtPct(s.metric_12v12)}</div>
+                          <div className="text-xs text-gray-400 small">{fmt(s.qty_2024)}→{fmt(s.qty_2025)}</div>
+                        </td>
+                        <td className="p-2 text-center">
+                          <div className={`${(s.metric_3v3 || 0) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}`}>{fmtPct(s.metric_3v3)}</div>
+                          <div className="text-xs text-gray-400 small">{fmt(s.qty_prev3)}→{fmt(s.qty_last3)}</div>
+                        </td>
+                        <td className="p-2 text-center">
+                          <div className={`${(s.metric_6v6 || 0) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}`}>{fmtPct(s.metric_6v6)}</div>
+                          <div className="text-xs text-gray-400 small">{fmt(s.qty_prev6)}→{fmt(s.qty_last6)}</div>
+                        </td>
+                        <td className="p-2 text-center">
+                          <div className={`${(s.metric_2v2 || 0) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}`}>{fmtPct(s.metric_2v2)}</div>
+                          <div className="text-xs text-gray-400 small">{fmt(s.qty_prev2)}→{fmt(s.qty_last2)}</div>
+                        </td>
+                        <td className="p-2 text-center"><ShortTermBadge status={s.status_short || 'יציב'} sm /></td>
+                        <td className="p-2 text-center font-bold">{fmt(s.qty_total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            
+            {/* Data Table */}
+            <div>
+              <div className="flex items-center gap-3 mb-3">
+                <h3 className="text-lg font-bold text-purple-700 flex items-center gap-2 print:text-black"><BarChart3 size={20} className="print:hidden" />נתונים</h3>
+                <PeriodSelector value={compDataPeriod} onChange={setCompDataPeriod} className="print:hidden" />
+                <span className="hidden print:inline text-sm text-gray-500">({getPeriodLabel(compDataPeriod)})</span>
+              </div>
+              <div className="overflow-x-auto border rounded-xl print:border-0">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-purple-50">
+                      <th className="p-2 text-right border-b">#</th>
+                      <th className="p-2 text-right border-b">חנות</th>
+                      <th className="p-2 text-center border-b bg-blue-50">ברוטו</th>
+                      <th className="p-2 text-center border-b bg-green-50">נטו</th>
+                      <th className="p-2 text-center border-b bg-red-50">חזרות</th>
+                      <th className="p-2 text-center border-b bg-red-50">חזרות %</th>
+                      <th className="p-2 text-center border-b bg-violet-50">אספקות</th>
+                      <th className="p-2 text-center border-b bg-blue-50">ממוצע/אספקה</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedStores.map((s, idx) => {
+                      const data = storesWithCompData.find(x => x.id === s.id) || s;
+                      const returnsPctColor = (data.period_returns_pct || 0) > 20 ? 'text-red-600 font-bold' : (data.period_returns_pct || 0) > 10 ? 'text-blue-600' : 'text-gray-600';
+                      return (
+                        <tr key={s.id} onClick={() => { setShowComparison(false); onSelect(s); }} className="hover:bg-purple-50 cursor-pointer border-b">
+                          <td className="p-2 font-bold text-center">{idx + 1}</td>
+                          <td className="p-2 text-right"><div className="font-medium">{s.name}</div><div className="text-xs text-gray-500 small">{s.city}</div></td>
+                          <td className="p-2 text-center text-blue text-blue-700 font-medium">{fmt(data.period_gross || 0)}</td>
+                          <td className="p-2 text-center text-green text-green-700 font-medium">{fmt(data.period_net || 0)}</td>
+                          <td className="p-2 text-center text-red text-red-600 font-medium">{fmt(data.period_returns || 0)}</td>
+                          <td className={`p-2 text-center ${returnsPctColor}`}>{(data.period_returns_pct || 0).toFixed(1)}%</td>
+                          <td className="p-2 text-center text-purple text-violet-700 font-medium">{fmt(data.period_deliveries || 0)}</td>
+                          <td className="p-2 text-center text-amber text-blue-700 font-medium">{fmt(Math.round(data.period_avg_per_delivery || 0))}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
   </div>);
 };
 
+// City Comparison Modal - reusable component
+// v1.10.8 - City Comparison Modal - updated with period selector, PDF, and numbers in metrics
+const CityComparisonModal = ({ city, stores, currentStoreId, onClose, onSelectStore }) => {
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [dataPeriod, setDataPeriod] = useState('h2_2025');
+  const printRef = useRef(null);
+  
+  if (!stores || stores.length === 0) return null;
+  
+  // Calculate data for each store based on selected period
+  const storesWithData = useMemo(() => stores.map(s => calcStoreDataForPeriod(s, dataPeriod)), [stores, dataPeriod]);
+  
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+  
+  const removeSelected = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  };
+  
+  const clearSelection = () => setSelectedIds(new Set());
+  
+  // Filter stores by search term
+  const filteredStores = storesWithData.filter(s => 
+    s.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+  
+  // Check if a store should be visible based on selection
+  const isVisible = (id) => selectedIds.size === 0 || selectedIds.has(id);
+  
+  // Filtered stores for display in tables
+  const visibleStores = storesWithData.filter(s => isVisible(s.id));
+  
+  // Get selected stores for display
+  const selectedStores = storesWithData.filter(s => selectedIds.has(s.id));
+  
+  // v1.10.8 - PDF export
+  const handlePrintPDF = () => {
+    const printContent = printRef.current;
+    if (!printContent) return;
+    
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <html dir="rtl">
+      <head>
+        <title>השוואת חנויות ב${city} - Baron</title>
+        <style>
+          * { box-sizing: border-box; font-family: Arial, sans-serif; }
+          body { padding: 20px; direction: rtl; }
+          h2 { color: #1e40af; margin: 20px 0 10px; font-size: 18px; }
+          h3 { color: #6b21a8; margin: 20px 0 10px; font-size: 16px; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11px; page-break-inside: auto; }
+          th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: center; }
+          th { background: #f3f4f6; font-weight: bold; }
+          tr { page-break-inside: avoid; }
+          .text-right { text-align: right; }
+          .text-emerald { color: #059669; }
+          .text-red { color: #dc2626; }
+          .text-blue { color: #2563eb; }
+          .text-green { color: #16a34a; }
+          .text-purple { color: #7c3aed; }
+          .text-amber { color: #d97706; }
+          .summary-row { background: #dbeafe; font-weight: bold; }
+          .summary-row-data { background: #f3e8ff; font-weight: bold; }
+          .small { font-size: 9px; color: #666; }
+          .current-store { background: #eff6ff; }
+          @media print { 
+            @page { margin: 1cm; size: landscape; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
+        </style>
+      </head>
+      <body>
+        <h1 style="text-align:center;color:#1f2937;">השוואת חנויות ב${city} - Baron</h1>
+        <p style="text-align:center;color:#666;margin-bottom:20px;">${visibleStores.length} חנויות | ${new Date().toLocaleDateString('he-IL')}</p>
+        ${printContent.innerHTML}
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => { printWindow.print(); printWindow.close(); }, 250);
+  };
+  
+  // Export functions
+  const exportCityMetricsToCSV = () => {
+    const cols = [
+      { k: 'name', l: 'חנות' },
+      { k: 'city', l: 'עיר' },
+      { k: 'status_long', l: 'סטטוס ארוך' },
+      { k: 'qty_2024', l: 'כמות 2024' },
+      { k: 'qty_2025', l: 'כמות 2025' },
+      { k: 'metric_12v12', l: 'שנתי %' },
+      { k: 'qty_prev3', l: '3 חודשים קודם' },
+      { k: 'qty_last3', l: '3 חודשים אחרון' },
+      { k: 'metric_3v3', l: '3 חודשים %' },
+      { k: 'metric_6v6', l: '6 חודשים %' },
+      { k: 'metric_2v2', l: '2 חודשים %' },
+      { k: 'status_short', l: 'סטטוס קצר' },
+    ];
+    exportCSV(visibleStores, cols, `השוואת_${city}_מדדים`);
+  };
+  
+  const exportCityDataToCSV = () => {
+    const periodLabel = getPeriodLabel(dataPeriod).replace(/[()]/g, '');
+    const cols = [
+      { k: 'name', l: 'חנות' },
+      { k: 'city', l: 'עיר' },
+      { k: 'period_gross', l: 'ברוטו' },
+      { k: 'period_net', l: 'נטו' },
+      { k: 'period_returns', l: 'חזרות' },
+      { k: 'period_returns_pct', l: 'חזרות %' },
+      { k: 'period_deliveries', l: 'אספקות' },
+      { k: 'period_avg_per_delivery', l: 'ממוצע לאספקה' },
+    ];
+    exportCSV(visibleStores, cols, `השוואת_${city}_${periodLabel}`);
+  };
+  
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-2 md:p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 flex justify-between items-center print:hidden">
+          <div className="flex items-center gap-3">
+            <MapPin size={24} />
+            <h2 className="text-lg md:text-xl font-bold">השוואת חנויות ב{city}</h2>
+            <span className="bg-white/20 px-3 py-1 rounded-full text-sm">{stores.length} חנויות</span>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full">
+            <X size={24} />
+          </button>
+        </div>
+        
+        <div className="overflow-auto max-h-[calc(95vh-80px)] p-3 md:p-5 space-y-6">
+          {/* Collapsible Selection Panel */}
+          <div className="bg-gray-50 rounded-xl border print:hidden">
+            {/* Panel Header - Always Visible */}
+            <button 
+              onClick={() => setPanelOpen(!panelOpen)}
+              className="w-full p-4 flex items-center justify-between hover:bg-gray-100 rounded-xl transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Filter size={18} className="text-blue-600" />
+                <span className="font-bold text-gray-700">בחר חנויות להשוואה</span>
+                {selectedIds.size > 0 && (
+                  <span className="bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">{selectedIds.size} נבחרו</span>
+                )}
+              </div>
+              <ChevronDown size={20} className={`text-gray-500 transition-transform ${panelOpen ? 'rotate-180' : ''}`} />
+            </button>
+            
+            {/* Selected Stores Display - Always visible when there are selections */}
+            {selectedIds.size > 0 && !panelOpen && (
+              <div className="px-4 pb-3 flex flex-wrap gap-2 border-t pt-3">
+                {selectedStores.map(s => (
+                  <span 
+                    key={s.id}
+                    className="bg-blue-100 text-blue-700 px-2 py-1 rounded-lg text-sm flex items-center gap-1"
+                  >
+                    {s.name}
+                    <button onClick={(e) => { e.stopPropagation(); removeSelected(s.id); }} className="hover:bg-blue-200 rounded p-0.5">
+                      <X size={14} />
+                    </button>
+                  </span>
+                ))}
+                <button 
+                  onClick={(e) => { e.stopPropagation(); clearSelection(); }}
+                  className="text-red-500 hover:text-red-700 text-sm px-2"
+                >
+                  נקה הכל
+                </button>
+              </div>
+            )}
+            
+            {/* Expandable Content */}
+            {panelOpen && (
+              <div className="p-4 border-t space-y-3">
+                {/* Search */}
+                <div className="relative">
+                  <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input 
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="חפש חנות..."
+                    className="w-full pr-10 pl-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                
+                {/* Store Buttons */}
+                <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
+                  {filteredStores.map(s => {
+                    const isSelected = selectedIds.has(s.id);
+                    const isCurrentStore = s.id === currentStoreId;
+                    return (
+                      <button
+                        key={s.id}
+                        onClick={() => toggleSelect(s.id)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all border-2 ${
+                          isSelected 
+                            ? 'bg-blue-500 text-white border-blue-500' 
+                            : isCurrentStore
+                              ? 'bg-blue-50 text-blue-700 border-blue-300 hover:border-blue-500'
+                              : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300'
+                        }`}
+                      >
+                        {isSelected && <Check size={14} className="inline ml-1" />}
+                        {s.name}
+                        {isCurrentStore && !isSelected && <span className="text-xs mr-1">(אתה)</span>}
+                      </button>
+                    );
+                  })}
+                  {filteredStores.length === 0 && (
+                    <p className="text-gray-500 text-sm">לא נמצאו חנויות</p>
+                  )}
+                </div>
+                
+                {/* Actions */}
+                <div className="flex justify-between items-center pt-2 border-t">
+                  <p className="text-xs text-gray-500">
+                    {selectedIds.size === 0 ? 'לא נבחרו חנויות - מוצגות כולן' : `נבחרו ${selectedIds.size} חנויות`}
+                  </p>
+                  {selectedIds.size > 0 && (
+                    <button 
+                      onClick={clearSelection}
+                      className="text-red-500 hover:text-red-700 text-sm flex items-center gap-1"
+                    >
+                      <X size={14} />
+                      נקה בחירה
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Printable content */}
+          <div ref={printRef}>
+            {/* Table 1: Metrics Comparison */}
+            <div className="mb-6">
+              <div className="flex justify-between items-center mb-3 print:hidden">
+                <h3 className="text-lg font-bold flex items-center gap-2 text-blue-700">
+                  <TrendingUp size={20} />
+                  השוואת מדדים
+                  {selectedIds.size > 0 && <span className="text-sm font-normal text-blue-500">({selectedIds.size} חנויות נבחרו)</span>}
+                </h3>
+                <div className="flex gap-2">
+                  <button onClick={handlePrintPDF} className="flex items-center gap-1 px-3 py-1.5 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600">
+                    <FileText size={16} />PDF
+                  </button>
+                  <button onClick={exportCityMetricsToCSV} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-sm hover:bg-emerald-600">
+                    <Download size={16} />Excel
+                  </button>
+                </div>
+              </div>
+              <h2 className="hidden print:block">השוואת מדדים - {city}</h2>
+              <div className="overflow-x-auto border rounded-xl print:border-0">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-100 text-gray-700">
+                      <th className="p-2 md:p-3 text-right border-b font-bold">#</th>
+                      <th className="p-2 md:p-3 text-right border-b font-bold min-w-[120px] md:min-w-[150px]">חנות</th>
+                      <th className="p-2 md:p-3 text-center border-b font-bold">סטטוס<br/>ארוך</th>
+                      <th className="p-2 md:p-3 text-center border-b font-bold">שנתי<br/>24→25</th>
+                      <th className="p-2 md:p-3 text-center border-b font-bold">3 חודשים<br/>24→25</th>
+                      <th className="p-2 md:p-3 text-center border-b font-bold">6 חודשים<br/>H1→H2</th>
+                      <th className="p-2 md:p-3 text-center border-b font-bold">2 חודשים<br/>ספט→נוב</th>
+                      <th className="p-2 md:p-3 text-center border-b font-bold">סטטוס<br/>קצר</th>
+                      <th className="p-2 md:p-3 text-center border-b font-bold">כמות<br/>2025</th>
+                      <th className="p-2 md:p-3 text-center border-b font-bold">מחזור ₪</th>
+                    </tr>
+                    {/* Summary Row */}
+                    <tr className="bg-blue-50 font-bold text-blue-800 border-b-2 border-blue-300 summary-row">
+                      <td className="p-2 text-center">Σ</td>
+                      <td className="p-2 text-right">סה״כ {visibleStores.length} חנויות</td>
+                      <td className="p-2 text-center">-</td>
+                      <td className="p-2 text-center">
+                        <span className={(visibleStores.reduce((s, x) => s + (x.metric_12v12 || 0), 0) / visibleStores.length) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}>
+                          {fmtPct(visibleStores.reduce((s, x) => s + (x.metric_12v12 || 0), 0) / visibleStores.length)}
+                        </span>
+                      </td>
+                      <td className="p-2 text-center">
+                        <span className={(visibleStores.reduce((s, x) => s + (x.metric_3v3 || 0), 0) / visibleStores.length) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}>
+                          {fmtPct(visibleStores.reduce((s, x) => s + (x.metric_3v3 || 0), 0) / visibleStores.length)}
+                        </span>
+                      </td>
+                      <td className="p-2 text-center">
+                        <span className={(visibleStores.reduce((s, x) => s + (x.metric_6v6 || 0), 0) / visibleStores.length) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}>
+                          {fmtPct(visibleStores.reduce((s, x) => s + (x.metric_6v6 || 0), 0) / visibleStores.length)}
+                        </span>
+                      </td>
+                      <td className="p-2 text-center">
+                        <span className={(visibleStores.reduce((s, x) => s + (x.metric_2v2 || 0), 0) / visibleStores.length) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}>
+                          {fmtPct(visibleStores.reduce((s, x) => s + (x.metric_2v2 || 0), 0) / visibleStores.length)}
+                        </span>
+                      </td>
+                      <td className="p-2 text-center">-</td>
+                      <td className="p-2 text-center">{fmt(visibleStores.reduce((s, x) => s + (x.qty_2025 || 0), 0))}</td>
+                      <td className="p-2 text-center">₪{fmt(visibleStores.reduce((s, x) => s + (x.sales_2025 || 0), 0))}</td>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...visibleStores].sort((a, b) => (b.metric_12v12 || 0) - (a.metric_12v12 || 0)).map((s, i) => {
+                      const isCurrentStore = s.id === currentStoreId;
+                      const isSelected = selectedIds.has(s.id);
+                      const statusLongCfg = STATUS_CFG[s.status_long] || STATUS_CFG['יציב'];
+                      const statusShortCfg = STATUS_CFG[s.status_short] || STATUS_CFG['יציב'];
+                      return (
+                        <tr 
+                          key={s.id} 
+                          onClick={() => onSelectStore && onSelectStore(s)}
+                          className={`${isCurrentStore ? 'bg-blue-50 current-store' : isSelected ? 'bg-blue-50/50' : 'hover:bg-gray-50'} border-b cursor-pointer hover:bg-blue-100 transition-colors`}
+                        >
+                          <td className="p-2 text-center font-bold">{i + 1}</td>
+                          <td className="p-2 text-right">
+                            <div className={`font-medium ${isCurrentStore ? 'text-blue-700' : ''}`}>{s.name}</div>
+                            {isCurrentStore && <span className="text-xs text-blue-500 bg-blue-100 px-1 rounded">אתה כאן</span>}
+                          </td>
+                          <td className="p-2 text-center">
+                            <span className={`${statusLongCfg.bg} ${statusLongCfg.text} px-1.5 py-0.5 rounded text-xs whitespace-nowrap`}>{s.status_long || 'יציב'}</span>
+                          </td>
+                          <td className="p-2 text-center">
+                            <div className={`font-medium ${(s.metric_12v12 || 0) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}`}>{fmtPct(s.metric_12v12)}</div>
+                            <div className="text-xs text-gray-400 small">{fmt(s.qty_2024)}→{fmt(s.qty_2025)}</div>
+                          </td>
+                          <td className="p-2 text-center">
+                            <div className={`font-medium ${(s.metric_3v3 || 0) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}`}>{fmtPct(s.metric_3v3)}</div>
+                            <div className="text-xs text-gray-400 small">{fmt(s.qty_prev3)}→{fmt(s.qty_last3)}</div>
+                          </td>
+                          <td className="p-2 text-center">
+                            <div className={`font-medium ${(s.metric_6v6 || 0) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}`}>{fmtPct(s.metric_6v6)}</div>
+                            <div className="text-xs text-gray-400 small">{fmt(s.qty_prev6)}→{fmt(s.qty_last6)}</div>
+                          </td>
+                          <td className="p-2 text-center">
+                            <div className={`font-medium ${(s.metric_2v2 || 0) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}`}>{fmtPct(s.metric_2v2)}</div>
+                            <div className="text-xs text-gray-400 small">{fmt(s.qty_prev2)}→{fmt(s.qty_last2)}</div>
+                          </td>
+                          <td className="p-2 text-center">
+                            <span className={`${statusShortCfg.bg} ${statusShortCfg.text} px-1.5 py-0.5 rounded text-xs whitespace-nowrap`}>{s.status_short || 'יציב'}</span>
+                          </td>
+                          <td className="p-2 text-center font-medium">{fmt(s.qty_2025)}</td>
+                          <td className="p-2 text-center">₪{fmt(s.sales_2025)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            
+            {/* Table 2: Data */}
+            <div>
+              <div className="flex justify-between items-center mb-3 print:hidden">
+                <h3 className="text-lg font-bold flex items-center gap-2 text-purple-700">
+                  <BarChart3 size={20} />
+                  נתונים חודשיים
+                  <PeriodSelector value={dataPeriod} onChange={setDataPeriod} />
+                </h3>
+                <button onClick={exportCityDataToCSV} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-sm hover:bg-emerald-600">
+                  <Download size={16} />Excel
+                </button>
+              </div>
+              <h3 className="hidden print:block">נתונים חודשיים ({getPeriodLabel(dataPeriod)})</h3>
+              <div className="overflow-x-auto border rounded-xl print:border-0">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-purple-50 text-gray-700">
+                      <th className="p-2 md:p-3 text-right border-b font-bold">#</th>
+                      <th className="p-2 md:p-3 text-right border-b font-bold min-w-[120px] md:min-w-[150px]">חנות</th>
+                      <th className="p-2 md:p-3 text-center border-b font-bold bg-blue-50">ברוטו</th>
+                      <th className="p-2 md:p-3 text-center border-b font-bold bg-green-50">נטו</th>
+                      <th className="p-2 md:p-3 text-center border-b font-bold bg-red-50">חזרות</th>
+                      <th className="p-2 md:p-3 text-center border-b font-bold bg-red-50">חזרות %</th>
+                      <th className="p-2 md:p-3 text-center border-b font-bold bg-violet-50">אספקות</th>
+                      <th className="p-2 md:p-3 text-center border-b font-bold bg-blue-50">ממוצע<br/>לאספקה</th>
+                    </tr>
+                    {/* Summary Row */}
+                    <tr className="bg-purple-100 font-bold text-purple-800 border-b-2 border-purple-300 summary-row-data">
+                      <td className="p-2 text-center">Σ</td>
+                      <td className="p-2 text-right">סה״כ {visibleStores.length} חנויות</td>
+                      <td className="p-2 text-center text-blue text-blue-700">{fmt(visibleStores.reduce((s, x) => s + x.period_gross, 0))}</td>
+                      <td className="p-2 text-center text-green text-green-700">{fmt(visibleStores.reduce((s, x) => s + x.period_net, 0))}</td>
+                      <td className="p-2 text-center text-red text-red-600">{fmt(visibleStores.reduce((s, x) => s + x.period_returns, 0))}</td>
+                      <td className="p-2 text-center text-red text-red-600">
+                        {(visibleStores.reduce((s, x) => s + x.period_gross, 0) > 0 
+                          ? (visibleStores.reduce((s, x) => s + x.period_returns, 0) / visibleStores.reduce((s, x) => s + x.period_gross, 0) * 100) 
+                          : 0).toFixed(1)}%
+                      </td>
+                      <td className="p-2 text-center text-purple text-violet-700">{fmt(visibleStores.reduce((s, x) => s + x.period_deliveries, 0))}</td>
+                      <td className="p-2 text-center text-amber text-blue-700">
+                        {visibleStores.reduce((s, x) => s + x.period_deliveries, 0) > 0 
+                          ? fmt(Math.round(visibleStores.reduce((s, x) => s + x.period_net, 0) / visibleStores.reduce((s, x) => s + x.period_deliveries, 0)))
+                          : '-'}
+                      </td>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...visibleStores].sort((a, b) => (b.period_net || 0) - (a.period_net || 0)).map((s, i) => {
+                      const isCurrentStore = s.id === currentStoreId;
+                      const isSelected = selectedIds.has(s.id);
+                      const returnsPctColor = s.period_returns_pct > 20 ? 'text-red-600 font-bold' : s.period_returns_pct > 10 ? 'text-blue-600' : 'text-gray-600';
+                      return (
+                        <tr 
+                          key={s.id} 
+                          onClick={() => onSelectStore && onSelectStore(s)}
+                          className={`${isCurrentStore ? 'bg-purple-50 current-store' : isSelected ? 'bg-purple-50/50' : 'hover:bg-gray-50'} border-b cursor-pointer hover:bg-purple-100 transition-colors`}
+                        >
+                          <td className="p-2 text-center font-bold">{i + 1}</td>
+                          <td className="p-2 text-right">
+                            <div className={`font-medium ${isCurrentStore ? 'text-purple-700' : ''}`}>{s.name}</div>
+                            {isCurrentStore && <span className="text-xs text-purple-500 bg-purple-100 px-1 rounded">אתה כאן</span>}
+                          </td>
+                          <td className="p-2 text-center bg-blue-50/30 font-medium text-blue text-blue-700">{fmt(s.period_gross)}</td>
+                          <td className="p-2 text-center bg-green-50/30 font-medium text-green text-green-700">{fmt(s.period_net)}</td>
+                          <td className="p-2 text-center bg-red-50/30 font-medium text-red text-red-600">{fmt(s.period_returns)}</td>
+                          <td className={`p-2 text-center bg-red-50/30 ${returnsPctColor}`}>{s.period_returns_pct.toFixed(1)}%</td>
+                          <td className="p-2 text-center bg-violet-50/30 font-medium text-purple text-violet-700">{fmt(s.period_deliveries)}</td>
+                          <td className="p-2 text-center bg-blue-50/30 font-medium text-amber text-blue-700">{fmt(Math.round(s.period_avg_per_delivery))}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// v1.10.7 - Global Store Comparison Modal - compare any stores
+// v1.10.8 - Added period selector, improved PDF, added numbers to metrics
+const GlobalStoreComparisonModal = ({ stores, onClose, onSelectStore }) => {
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [searchTerm, setSearchTerm] = useState('');
+  const [dataPeriod, setDataPeriod] = useState('h2_2025');
+  const printRef = useRef(null);
+  
+  if (!stores || stores.length === 0) return null;
+  
+  // Calculate data for each store based on selected period
+  const storesWithData = useMemo(() => stores.map(s => calcStoreDataForPeriod(s, dataPeriod)), [stores, dataPeriod]);
+  
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  
+  const removeSelected = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  };
+  
+  const clearSelection = () => setSelectedIds(new Set());
+  
+  // Filter stores by search term
+  const searchResults = searchTerm.length >= 2 
+    ? storesWithData.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()) || s.city?.toLowerCase().includes(searchTerm.toLowerCase()))
+    : [];
+  
+  // Selected stores for tables
+  const selectedStores = storesWithData.filter(s => selectedIds.has(s.id));
+  
+  // v1.10.8 - Improved PDF export that captures both tables
+  const handlePrintPDF = () => {
+    const printContent = printRef.current;
+    if (!printContent) return;
+    
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <html dir="rtl">
+      <head>
+        <title>השוואת חנויות - Baron</title>
+        <style>
+          * { box-sizing: border-box; font-family: Arial, sans-serif; }
+          body { padding: 20px; direction: rtl; }
+          h2 { color: #1e40af; margin: 20px 0 10px; font-size: 18px; }
+          h3 { color: #6b21a8; margin: 20px 0 10px; font-size: 16px; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11px; page-break-inside: auto; }
+          th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: center; }
+          th { background: #f3f4f6; font-weight: bold; }
+          tr { page-break-inside: avoid; }
+          .text-right { text-align: right; }
+          .text-emerald { color: #059669; }
+          .text-red { color: #dc2626; }
+          .text-blue { color: #2563eb; }
+          .text-green { color: #16a34a; }
+          .text-purple { color: #7c3aed; }
+          .text-amber { color: #d97706; }
+          .summary-row { background: #dbeafe; font-weight: bold; }
+          .summary-row-data { background: #f3e8ff; font-weight: bold; }
+          .small { font-size: 9px; color: #666; }
+          @media print { 
+            @page { margin: 1cm; size: landscape; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
+        </style>
+      </head>
+      <body>
+        <h1 style="text-align:center;color:#1f2937;">השוואת חנויות - Baron</h1>
+        <p style="text-align:center;color:#666;margin-bottom:20px;">${selectedStores.length} חנויות | ${new Date().toLocaleDateString('he-IL')}</p>
+        ${printContent.innerHTML}
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => { printWindow.print(); printWindow.close(); }, 250);
+  };
+  
+  // Export functions
+  const exportMetricsToCSV = () => {
+    if (selectedStores.length === 0) return;
+    const cols = [
+      { k: 'name', l: 'חנות' },
+      { k: 'city', l: 'עיר' },
+      { k: 'status_long', l: 'סטטוס ארוך' },
+      { k: 'qty_2024', l: 'כמות 2024' },
+      { k: 'qty_2025', l: 'כמות 2025' },
+      { k: 'metric_12v12', l: 'שנתי %' },
+      { k: 'qty_prev3', l: '3 חודשים קודם' },
+      { k: 'qty_last3', l: '3 חודשים אחרון' },
+      { k: 'metric_3v3', l: '3 חודשים %' },
+      { k: 'qty_prev6', l: '6 חודשים קודם' },
+      { k: 'qty_last6', l: '6 חודשים אחרון' },
+      { k: 'metric_6v6', l: '6 חודשים %' },
+      { k: 'qty_prev2', l: '2 חודשים קודם' },
+      { k: 'qty_last2', l: '2 חודשים אחרון' },
+      { k: 'metric_2v2', l: '2 חודשים %' },
+      { k: 'status_short', l: 'סטטוס קצר' },
+    ];
+    exportCSV(selectedStores, cols, 'השוואת_חנויות_מדדים');
+  };
+  
+  const exportDataToCSV = () => {
+    if (selectedStores.length === 0) return;
+    const periodLabel = getPeriodLabel(dataPeriod).replace(/[()]/g, '');
+    const cols = [
+      { k: 'name', l: 'חנות' },
+      { k: 'city', l: 'עיר' },
+      { k: 'period_gross', l: 'ברוטו' },
+      { k: 'period_net', l: 'נטו' },
+      { k: 'period_returns', l: 'חזרות' },
+      { k: 'period_returns_pct', l: 'חזרות %' },
+      { k: 'period_deliveries', l: 'אספקות' },
+      { k: 'period_avg_per_delivery', l: 'ממוצע לאספקה' },
+    ];
+    exportCSV(selectedStores, cols, `השוואת_חנויות_${periodLabel}`);
+  };
+  
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-2 md:p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-4 flex justify-between items-center print:hidden">
+          <div className="flex items-center gap-3">
+            <BarChart3 size={24} />
+            <h2 className="text-lg md:text-xl font-bold">השוואת חנויות</h2>
+            {selectedIds.size > 0 && <span className="bg-white/20 px-3 py-1 rounded-full text-sm">{selectedIds.size} נבחרו</span>}
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full">
+            <X size={24} />
+          </button>
+        </div>
+        
+        {/* Content */}
+        <div className="p-4 md:p-6 overflow-y-auto max-h-[calc(95vh-80px)] space-y-6">
+          
+          {/* Search & Selection Panel */}
+          <div className="bg-gray-50 rounded-xl p-4 border print:hidden">
+            <div className="flex flex-col md:flex-row gap-4">
+              {/* Search */}
+              <div className="flex-1">
+                <label className="text-sm font-medium text-gray-700 block mb-2">חיפוש חנויות להוספה</label>
+                <div className="relative">
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    placeholder="הקלד לפחות 2 תווים..."
+                    className="w-full pr-10 pl-4 py-2 border rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  />
+                </div>
+                {/* Search Results */}
+                {searchResults.length > 0 && (
+                  <div className="mt-2 max-h-40 overflow-y-auto border rounded-lg bg-white">
+                    {searchResults.slice(0, 20).map(s => (
+                      <button
+                        key={s.id}
+                        onClick={() => { toggleSelect(s.id); setSearchTerm(''); }}
+                        className={`w-full text-right px-3 py-2 hover:bg-emerald-50 flex justify-between items-center border-b last:border-b-0 ${selectedIds.has(s.id) ? 'bg-emerald-100' : ''}`}
+                      >
+                        <span className="font-medium">{s.name}</span>
+                        <span className="text-sm text-gray-500">{s.city}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              
+              {/* Selected Stores */}
+              <div className="flex-1">
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-sm font-medium text-gray-700">חנויות שנבחרו ({selectedIds.size})</label>
+                  {selectedIds.size > 0 && (
+                    <button onClick={clearSelection} className="text-xs text-red-600 hover:text-red-800">נקה הכל</button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
+                  {selectedStores.map(s => (
+                    <span key={s.id} className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-100 text-emerald-800 rounded-full text-sm">
+                      {s.name}
+                      <button onClick={() => removeSelected(s.id)} className="hover:text-red-600">
+                        <X size={14} />
+                      </button>
+                    </span>
+                  ))}
+                  {selectedIds.size === 0 && <p className="text-gray-400 text-sm">חפש והוסף חנויות להשוואה</p>}
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Tables - only show if stores selected */}
+          {selectedStores.length > 0 && (
+            <div ref={printRef}>
+              {/* Table 1: Metrics Comparison */}
+              <div className="mb-6">
+                <div className="flex justify-between items-center mb-3 print:hidden">
+                  <h3 className="text-lg font-bold flex items-center gap-2 text-blue-700">
+                    <TrendingUp size={20} />
+                    השוואת מדדים
+                  </h3>
+                  <div className="flex gap-2">
+                    <button onClick={handlePrintPDF} className="flex items-center gap-1 px-3 py-1.5 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600">
+                      <FileText size={16} />PDF
+                    </button>
+                    <button onClick={exportMetricsToCSV} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-sm hover:bg-emerald-600">
+                      <Download size={16} />Excel
+                    </button>
+                  </div>
+                </div>
+                <h2 className="hidden print:block">השוואת מדדים</h2>
+                <div className="overflow-x-auto border rounded-xl print:border-0">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-100 text-gray-700">
+                        <th className="p-2 md:p-3 text-right border-b font-bold">#</th>
+                        <th className="p-2 md:p-3 text-right border-b font-bold min-w-[120px]">חנות</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">סטטוס<br/>ארוך</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">שנתי<br/>24→25</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">3 חודשים<br/>24→25</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">6 חודשים<br/>H1→H2</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">2 חודשים<br/>ספט→נוב</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">סטטוס<br/>קצר</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">כמות<br/>2025</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">מחזור ₪</th>
+                      </tr>
+                      {/* Summary Row */}
+                      <tr className="bg-blue-50 font-bold text-blue-800 border-b-2 border-blue-300 summary-row">
+                        <td className="p-2 text-center">Σ</td>
+                        <td className="p-2 text-right">סה״כ {selectedStores.length} חנויות</td>
+                        <td className="p-2 text-center">-</td>
+                        <td className="p-2 text-center">
+                          <span className={(selectedStores.reduce((s, x) => s + (x.metric_12v12 || 0), 0) / selectedStores.length) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}>
+                            {fmtPct(selectedStores.reduce((s, x) => s + (x.metric_12v12 || 0), 0) / selectedStores.length)}
+                          </span>
+                        </td>
+                        <td className="p-2 text-center">
+                          <span className={(selectedStores.reduce((s, x) => s + (x.metric_3v3 || 0), 0) / selectedStores.length) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}>
+                            {fmtPct(selectedStores.reduce((s, x) => s + (x.metric_3v3 || 0), 0) / selectedStores.length)}
+                          </span>
+                        </td>
+                        <td className="p-2 text-center">
+                          <span className={(selectedStores.reduce((s, x) => s + (x.metric_6v6 || 0), 0) / selectedStores.length) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}>
+                            {fmtPct(selectedStores.reduce((s, x) => s + (x.metric_6v6 || 0), 0) / selectedStores.length)}
+                          </span>
+                        </td>
+                        <td className="p-2 text-center">
+                          <span className={(selectedStores.reduce((s, x) => s + (x.metric_2v2 || 0), 0) / selectedStores.length) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}>
+                            {fmtPct(selectedStores.reduce((s, x) => s + (x.metric_2v2 || 0), 0) / selectedStores.length)}
+                          </span>
+                        </td>
+                        <td className="p-2 text-center">-</td>
+                        <td className="p-2 text-center">{fmt(selectedStores.reduce((s, x) => s + (x.qty_2025 || 0), 0))}</td>
+                        <td className="p-2 text-center">₪{fmt(selectedStores.reduce((s, x) => s + (x.sales_2025 || 0), 0))}</td>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...selectedStores].sort((a, b) => (b.metric_12v12 || 0) - (a.metric_12v12 || 0)).map((s, i) => {
+                        const statusLongCfg = STATUS_CFG[s.status_long] || STATUS_CFG['יציב'];
+                        const statusShortCfg = STATUS_CFG[s.status_short] || STATUS_CFG['יציב'];
+                        return (
+                          <tr 
+                            key={s.id} 
+                            onClick={() => onSelectStore && onSelectStore(s)}
+                            className="hover:bg-blue-50 border-b cursor-pointer transition-colors"
+                          >
+                            <td className="p-2 text-center font-bold">{i + 1}</td>
+                            <td className="p-2 text-right">
+                              <div className="font-medium">{s.name}</div>
+                              <div className="text-xs text-gray-500 small">{s.city}</div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <span className={`${statusLongCfg.bg} ${statusLongCfg.text} px-1.5 py-0.5 rounded text-xs whitespace-nowrap`}>{s.status_long || 'יציב'}</span>
+                            </td>
+                            <td className="p-2 text-center">
+                              <div className={`font-medium ${(s.metric_12v12 || 0) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}`}>{fmtPct(s.metric_12v12)}</div>
+                              <div className="text-xs text-gray-400 small">{fmt(s.qty_2024)}→{fmt(s.qty_2025)}</div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <div className={`font-medium ${(s.metric_3v3 || 0) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}`}>{fmtPct(s.metric_3v3)}</div>
+                              <div className="text-xs text-gray-400 small">{fmt(s.qty_prev3)}→{fmt(s.qty_last3)}</div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <div className={`font-medium ${(s.metric_6v6 || 0) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}`}>{fmtPct(s.metric_6v6)}</div>
+                              <div className="text-xs text-gray-400 small">{fmt(s.qty_prev6)}→{fmt(s.qty_last6)}</div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <div className={`font-medium ${(s.metric_2v2 || 0) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}`}>{fmtPct(s.metric_2v2)}</div>
+                              <div className="text-xs text-gray-400 small">{fmt(s.qty_prev2)}→{fmt(s.qty_last2)}</div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <span className={`${statusShortCfg.bg} ${statusShortCfg.text} px-1.5 py-0.5 rounded text-xs whitespace-nowrap`}>{s.status_short || 'יציב'}</span>
+                            </td>
+                            <td className="p-2 text-center font-medium">{fmt(s.qty_2025)}</td>
+                            <td className="p-2 text-center">₪{fmt(s.sales_2025)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              
+              {/* Table 2: Data */}
+              <div>
+                <div className="flex justify-between items-center mb-3 print:hidden">
+                  <h3 className="text-lg font-bold flex items-center gap-2 text-purple-700">
+                    <BarChart3 size={20} />
+                    נתונים חודשיים
+                    <PeriodSelector value={dataPeriod} onChange={setDataPeriod} />
+                  </h3>
+                  <div className="flex gap-2">
+                    <button onClick={exportDataToCSV} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-sm hover:bg-emerald-600">
+                      <Download size={16} />Excel
+                    </button>
+                  </div>
+                </div>
+                <h3 className="hidden print:block">נתונים חודשיים ({getPeriodLabel(dataPeriod)})</h3>
+                <div className="overflow-x-auto border rounded-xl print:border-0">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-purple-50 text-gray-700">
+                        <th className="p-2 md:p-3 text-right border-b font-bold">#</th>
+                        <th className="p-2 md:p-3 text-right border-b font-bold min-w-[120px]">חנות</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold bg-blue-50">ברוטו</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold bg-green-50">נטו</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold bg-red-50">חזרות</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold bg-red-50">חזרות %</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold bg-violet-50">אספקות</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold bg-blue-50">ממוצע<br/>לאספקה</th>
+                      </tr>
+                      {/* Summary Row */}
+                      <tr className="bg-purple-100 font-bold text-purple-800 border-b-2 border-purple-300 summary-row-data">
+                        <td className="p-2 text-center">Σ</td>
+                        <td className="p-2 text-right">סה״כ {selectedStores.length} חנויות</td>
+                        <td className="p-2 text-center text-blue text-blue-700">{fmt(selectedStores.reduce((s, x) => s + x.period_gross, 0))}</td>
+                        <td className="p-2 text-center text-green text-green-700">{fmt(selectedStores.reduce((s, x) => s + x.period_net, 0))}</td>
+                        <td className="p-2 text-center text-red text-red-600">{fmt(selectedStores.reduce((s, x) => s + x.period_returns, 0))}</td>
+                        <td className="p-2 text-center text-red text-red-600">
+                          {(selectedStores.reduce((s, x) => s + x.period_gross, 0) > 0 
+                            ? (selectedStores.reduce((s, x) => s + x.period_returns, 0) / selectedStores.reduce((s, x) => s + x.period_gross, 0) * 100) 
+                            : 0).toFixed(1)}%
+                        </td>
+                        <td className="p-2 text-center text-purple text-violet-700">{fmt(selectedStores.reduce((s, x) => s + x.period_deliveries, 0))}</td>
+                        <td className="p-2 text-center text-amber text-blue-700">
+                          {selectedStores.reduce((s, x) => s + x.period_deliveries, 0) > 0 
+                            ? fmt(Math.round(selectedStores.reduce((s, x) => s + x.period_net, 0) / selectedStores.reduce((s, x) => s + x.period_deliveries, 0)))
+                            : '-'}
+                        </td>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...selectedStores].sort((a, b) => (b.period_net || 0) - (a.period_net || 0)).map((s, i) => {
+                        const returnsPctColor = s.period_returns_pct > 20 ? 'text-red-600 font-bold' : s.period_returns_pct > 10 ? 'text-blue-600' : 'text-gray-600';
+                        return (
+                          <tr 
+                            key={s.id} 
+                            onClick={() => onSelectStore && onSelectStore(s)}
+                            className="hover:bg-purple-50 border-b cursor-pointer transition-colors"
+                          >
+                            <td className="p-2 text-center font-bold">{i + 1}</td>
+                            <td className="p-2 text-right">
+                              <div className="font-medium">{s.name}</div>
+                              <div className="text-xs text-gray-500 small">{s.city}</div>
+                            </td>
+                            <td className="p-2 text-center bg-blue-50/30 font-medium text-blue text-blue-700">{fmt(s.period_gross)}</td>
+                            <td className="p-2 text-center bg-green-50/30 font-medium text-green text-green-700">{fmt(s.period_net)}</td>
+                            <td className="p-2 text-center bg-red-50/30 font-medium text-red text-red-600">{fmt(s.period_returns)}</td>
+                            <td className={`p-2 text-center bg-red-50/30 ${returnsPctColor}`}>{s.period_returns_pct.toFixed(1)}%</td>
+                            <td className="p-2 text-center bg-violet-50/30 font-medium text-purple text-violet-700">{fmt(s.period_deliveries)}</td>
+                            <td className="p-2 text-center bg-blue-50/30 font-medium text-amber text-blue-700">{fmt(Math.round(s.period_avg_per_delivery))}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {selectedStores.length === 0 && (
+            <div className="text-center py-12 text-gray-400">
+              <BarChart3 size={48} className="mx-auto mb-4 opacity-50" />
+              <p>בחר חנויות להשוואה</p>
+              <p className="text-sm">חפש בשם או עיר והוסף חנויות</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // City Indicator - not shown in PDF
-const CityIndicator = ({ store, allStores }) => {
+const CityIndicator = ({ store, allStores, onSelectStore }) => {
+  const [showModal, setShowModal] = useState(false);
+  
   const cityData = useMemo(() => {
-    if (!store.city) return null;
-    const cityStores = allStores.filter(s => s.city === store.city && !s.is_inactive);
+    const storeCity = (store.city || '').trim();
+    if (!storeCity) return null;
+    const cityStores = allStores.filter(s => (s.city || '').trim() === storeCity && !s.is_inactive);
     if (cityStores.length < 2) return null;
     const statusCounts = {};
     cityStores.forEach(s => { statusCounts[s.status] = (statusCounts[s.status] || 0) + 1; });
@@ -1134,8 +2815,9 @@ const CityIndicator = ({ store, allStores }) => {
     const qtyPct = Math.round(((cityStores.length - qtyRank) / cityStores.length) * 100);
     
     return {
-      city: store.city,
+      city: storeCity,
       total: cityStores.length,
+      stores: cityStores,
       statusCounts,
       longTermRank, shortTermRank, qtyRank,
       longTermPct, shortTermPct, qtyPct,
@@ -1150,7 +2832,7 @@ const CityIndicator = ({ store, allStores }) => {
   
   const RankingCard = ({ title, icon, rank, total, value, avg, pct, color, formatValue }) => {
     const isAboveAvg = formatValue === 'pct' ? value >= avg : value >= avg;
-    const barColor = pct >= 70 ? 'bg-emerald-500' : pct >= 40 ? 'bg-amber-500' : 'bg-red-500';
+    const barColor = pct >= 70 ? 'bg-emerald-500' : pct >= 40 ? 'bg-blue-500' : 'bg-red-500';
     
     return (
       <div className="bg-white rounded-xl p-4 shadow-sm border">
@@ -1197,10 +2879,14 @@ const CityIndicator = ({ store, allStores }) => {
   
   return (
     <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-5 border border-blue-200 print:hidden">
-      <div className="flex items-center gap-2 mb-4">
+      <div 
+        className="flex items-center gap-2 mb-4 cursor-pointer hover:opacity-80 transition-opacity" 
+        onClick={() => setShowModal(true)}
+      >
         <MapPin className="text-blue-600" size={22} />
-        <h3 className="text-lg font-bold text-blue-800">השוואה לחנויות ב{cityData.city}</h3>
+        <h3 className="text-lg font-bold text-blue-800 hover:underline">השוואה לחנויות ב{cityData.city}</h3>
         <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-sm font-medium">{cityData.total} חנויות</span>
+        <ChevronLeft size={18} className="text-blue-500" />
       </div>
       
       <div className="flex flex-wrap gap-2 mb-4">
@@ -1245,187 +2931,22 @@ const CityIndicator = ({ store, allStores }) => {
           formatValue="num"
         />
       </div>
-    </div>
-  );
-};
-
-// v1.8 - Missing Products Table Component
-const MissingProductsTable = ({ store, storeProducts }) => {
-  const [sortBy, setSortBy] = useState('total'); // 'total' or 'city'
-  const [minQty, setMinQty] = useState(0);
-  const [showTable, setShowTable] = useState(true);
-  const [selectedProduct, setSelectedProduct] = useState(null); // לפופאפ
-  
-  const storeCity = (store.city || '').trim();
-  
-  // חישוב מספר החנויות בעיר (פעם אחת)
-  const totalStoresInCity = useMemo(() => {
-    return STORES_RAW.filter(s => (s.city || '').trim() === storeCity && s.id !== store.id && !s.is_inactive).length;
-  }, [storeCity, store.id]);
-  
-  const missingProducts = useMemo(() => {
-    // IDs של מוצרים שהחנות כבר מוכרת
-    const storeProductIds = new Set(storeProducts.map(p => p.id));
-    
-    // כל המוצרים שהחנות לא מוכרת
-    const missing = PRODUCTS_RAW.filter(p => !storeProductIds.has(p.id) && !p.is_inactive);
-    
-    return missing.map(product => {
-      // כמות בעיר - מהחנויות שמוכרות את המוצר באותה עיר
-      const productStores = PRODUCT_STORES[String(product.id)] || [];
-      // סינון רק חנויות עם כמות > 0
-      const cityStores = productStores.filter(s => 
-        (s.city || '').trim() === storeCity && 
-        s.id !== store.id && 
-        (s.qty_2025 || 0) > 0
-      );
-      const cityQty = cityStores.reduce((sum, s) => sum + (s.qty_2025 || 0), 0);
-      const cityStoreCount = cityStores.length;
       
-      return {
-        ...product,
-        city_qty: cityQty,
-        city_store_count: cityStoreCount,
-        city_stores: cityStores, // שמירת רשימת החנויות (רק עם כמות > 0)
-        total_qty: product.qty_2025 || 0
-      };
-    }).filter(p => minQty === 0 || p.total_qty >= minQty || p.city_qty >= minQty);
-  }, [store, storeProducts, minQty, storeCity]);
-  
-  const sortedProducts = useMemo(() => {
-    return [...missingProducts].sort((a, b) => {
-      if (sortBy === 'city') {
-        return (b.city_qty || 0) - (a.city_qty || 0);
-      }
-      return (b.total_qty || 0) - (a.total_qty || 0);
-    });
-  }, [missingProducts, sortBy]);
-  
-  const cols = [
-    { k: 'name', l: 'מוצר', r: (v, r) => <div className="min-w-[120px]"><p className="font-medium text-sm leading-tight">{v}</p><p className="text-xs text-gray-500">{r.category}</p></div> },
-    { k: 'total_qty', l: 'כמות כללית\n(כל החברה)', r: v => <span className="font-bold text-blue-600">{fmt(v)}</span> },
-    { k: 'city_qty', l: `כמות בעיר\n(${storeCity || 'לא ידוע'})`, r: (v, r) => (
-      <div className="text-center">
-        {r.city_store_count > 0 ? (
-          <button 
-            onClick={(e) => { e.stopPropagation(); setSelectedProduct(r); }}
-            className="font-bold text-emerald-600 hover:text-emerald-800 hover:underline cursor-pointer"
-          >
-            {fmt(v)}
-          </button>
-        ) : (
-          <span className="font-bold text-gray-400">{fmt(v)}</span>
-        )}
-        {r.city_store_count > 0 && (
-          <p className="text-xs text-gray-500">{r.city_store_count} מתוך {totalStoresInCity} חנויות 👆</p>
-        )}
-        {r.city_store_count === 0 && totalStoresInCity > 0 && (
-          <p className="text-xs text-gray-400">0 מתוך {totalStoresInCity} חנויות</p>
-        )}
-      </div>
-    )},
-  ];
-  
-  if (missingProducts.length === 0) return null;
-  
-  return (
-    <div className="bg-white rounded-2xl shadow-lg p-6 border border-orange-200">
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-        <div className="flex items-center gap-2">
-          <span className="text-xl">🔍</span>
-          <h3 className="text-lg font-bold text-orange-700">מוצרים שהחנות לא מוכרת</h3>
-          <span className="text-sm text-gray-500">({sortedProducts.length})</span>
-        </div>
-        <button 
-          onClick={() => setShowTable(!showTable)} 
-          className="text-sm text-orange-600 hover:text-orange-800 bg-orange-50 px-3 py-1.5 rounded-lg"
-        >
-          {showTable ? 'הסתר' : 'הצג'} טבלה
-        </button>
-      </div>
-      
-      {showTable && (
-        <>
-          <div className="flex flex-wrap gap-3 items-center mb-4 print:hidden">
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-600">מיין לפי:</label>
-              <select 
-                value={sortBy} 
-                onChange={e => setSortBy(e.target.value)} 
-                className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm"
-              >
-                <option value="total">כמות כללית (כל החברה)</option>
-                <option value="city">כמות בעיר ({storeCity || 'לא ידוע'})</option>
-              </select>
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-600">מינימום כמות:</label>
-              <input 
-                type="number" 
-                value={minQty} 
-                onChange={e => setMinQty(Number(e.target.value) || 0)} 
-                className="w-24 px-3 py-1.5 border border-gray-200 rounded-lg text-sm" 
-              />
-            </div>
-          </div>
-          
-          <div className="bg-orange-50 rounded-lg p-3 mb-4 text-sm text-orange-800">
-            💡 <strong>הזדמנות למכירה:</strong> מוצרים אלו נמכרים טוב בחנויות אחרות אבל החנות הזו לא מקבלת אותם. לחץ על הכמות בעיר לפרטי החנויות.
-          </div>
-          
-          <Table data={sortedProducts} cols={cols} name={'store_' + store.id + '_missing'} compact />
-        </>
-      )}
-      
-      {/* פופאפ חנויות בעיר */}
-      {selectedProduct && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setSelectedProduct(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="bg-emerald-500 text-white p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-bold text-lg">{selectedProduct.name}</h3>
-                  <p className="text-emerald-100 text-sm">{selectedProduct.city_store_count} מתוך {totalStoresInCity} חנויות ב{storeCity} מוכרות מוצר זה</p>
-                </div>
-                <button onClick={() => setSelectedProduct(null)} className="p-2 hover:bg-emerald-600 rounded-lg">
-                  <X size={20} />
-                </button>
-              </div>
-            </div>
-            <div className="p-4 max-h-[60vh] overflow-y-auto">
-              <div className="space-y-2">
-                {selectedProduct.city_stores
-                  .sort((a, b) => (b.qty_2025 || 0) - (a.qty_2025 || 0))
-                  .map((s, i) => (
-                  <div key={s.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100">
-                    <div className="flex items-center gap-3">
-                      <span className="w-6 h-6 flex items-center justify-center bg-emerald-500 text-white rounded-full text-xs font-bold">{i + 1}</span>
-                      <div>
-                        <p className="font-medium text-sm">{s.name}</p>
-                        <p className="text-xs text-gray-500">{s.driver || '-'}</p>
-                      </div>
-                    </div>
-                    <div className="text-left">
-                      <p className="font-bold text-emerald-600">{fmt(s.qty_2025 || 0)}</p>
-                      <p className="text-xs text-gray-400">פריטים 2025</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-4 pt-4 border-t text-center">
-                <p className="text-sm text-gray-600">
-                  סה"כ <strong className="text-emerald-600">{fmt(selectedProduct.city_qty)}</strong> פריטים ב-{selectedProduct.city_store_count} חנויות
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* City Comparison Modal */}
+      {showModal && (
+        <CityComparisonModal 
+          city={cityData.city}
+          stores={cityData.stores}
+          currentStoreId={store.id}
+          onClose={() => setShowModal(false)}
+          onSelectStore={(s) => { setShowModal(false); onSelectStore && onSelectStore(s); }}
+        />
       )}
     </div>
   );
 };
 
-const StoreDetail = ({ store, onBack, allStores, excludedProducts = [], sourceWindow, rulesConfig }) => {
+const StoreDetail = ({ store, onBack, allStores, excludedProducts = [], sourceWindow, rulesConfig, onSelectStore }) => {
   const chart = useMemo(() => { if (!store.monthly_qty) return []; return Object.entries(store.monthly_qty).sort(([a],[b]) => Number(a)-Number(b)).map(([m,v]) => ({ month: fmtMonth(m), qty: v })); }, [store]);
   
   // Filter out excluded products AND apply rules config
@@ -1478,11 +2999,9 @@ const StoreDetail = ({ store, onBack, allStores, excludedProducts = [], sourceWi
   const prodCols = [
     { k: 'name', l: 'מוצר', r: (v, r) => <div className="min-w-[100px]"><p className="font-medium text-sm leading-tight">{v}</p><p className="text-xs text-gray-500">{r.category}</p></div> },
     { k: 'status_long', l: 'סטטוס', r: (v, r) => <StatusBadge item={r} sm /> },
-    { k: 'metric_long_term', l: 'טווח ארוך', t: METRIC_TIPS['long_term'], r: (v) => <LongTermCell value={v} /> },
-    { k: 'metric_short_term', l: 'טווח קצר', t: METRIC_TIPS['short_term'], r: (v, r) => <ShortTermCell value={v} ok={r.short_term_ok} /> },
     { k: 'metric_12v12', l: 'שנתי\n24→25', t: METRIC_TIPS['12v12'], r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
-    { k: 'metric_6v6', l: '6 חודשים', t: METRIC_TIPS['6v6'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev6} to={r.qty_last6} /> },
     { k: 'metric_3v3', l: '3 חודשים', t: METRIC_TIPS['3v3'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev3} to={r.qty_last3} /> },
+    { k: 'metric_6v6', l: '6 חודשים', t: METRIC_TIPS['6v6'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev6} to={r.qty_last6} /> },
     { k: 'metric_2v2', l: '2 חודשים', t: METRIC_TIPS['2v2'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev2} to={r.qty_last2} /> },
     { k: 'metric_peak_distance', l: 'מרחק מהשיא', t: METRIC_TIPS['peak'], r: (v, r) => <PeakCell pct={v} peak={r.peak_value} current={r.current_value} /> },
     { k: 'returns_pct_last6', l: 'חזרות %', t: METRIC_TIPS['returns'], r: (v, r) => {
@@ -1520,7 +3039,6 @@ const StoreDetail = ({ store, onBack, allStores, excludedProducts = [], sourceWi
                     <th className="text-right py-2 px-2 font-bold text-gray-700">תקופה</th>
                     <th className="text-center py-2 px-2 font-bold text-gray-700">חוק</th>
                     <th className="text-center py-2 px-2 font-bold text-gray-700">בפועל</th>
-                    <th className="text-center py-2 px-2 font-bold text-gray-700">סטטוס</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1528,9 +3046,8 @@ const StoreDetail = ({ store, onBack, allStores, excludedProducts = [], sourceWi
                     <tr key={idx} className="border-b border-gray-200">
                       <td className="py-2 px-2 font-medium text-gray-800">{row.name}</td>
                       <td className="py-2 px-2 text-gray-600 text-xs">{row.period}</td>
-                      <td className="py-2 px-2 text-center font-medium text-gray-700">{row.rule}</td>
-                      <td className={`py-2 px-2 text-center font-bold text-lg ${row.passed ? 'text-emerald-600' : 'text-red-600'}`}>{row.actual}</td>
-                      <td className="py-2 px-2 text-center">{row.passed ? <span className="text-emerald-600 text-lg">✓</span> : <span className="text-red-500 text-lg">✗</span>}</td>
+                      <td className="py-2 px-2 text-center font-medium text-gray-700">{row.rule || '-'}</td>
+                      <td className={`py-2 px-2 text-center font-bold text-lg ${(row.actualValue || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{row.actual}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1540,7 +3057,7 @@ const StoreDetail = ({ store, onBack, allStores, excludedProducts = [], sourceWi
         </div>
       )}
     </div>
-    <CityIndicator store={store} allStores={allStores} />
+    <CityIndicator store={store} allStores={allStores} onSelectStore={onSelectStore} />
     <div className="grid grid-cols-3 lg:grid-cols-6 gap-3">
       <MBox label="שנתי (24→25)" value={store.metric_12v12} sub={fmt(store.qty_2024) + '→' + fmt(store.qty_2025)} />
       <MBox label="6 חודשים (H1→H2)" value={store.metric_6v6} sub={fmt(store.qty_prev6) + '→' + fmt(store.qty_last6)} />
@@ -1555,11 +3072,9 @@ const StoreDetail = ({ store, onBack, allStores, excludedProducts = [], sourceWi
       <div className="bg-white rounded-xl shadow p-4 text-center"><p className="text-sm text-gray-500">מחזור 2024</p><p className="text-xl font-bold text-gray-600">₪{fmt(store.sales_2024)}</p></div>
       <div className="bg-white rounded-xl shadow p-4 text-center"><p className="text-sm text-gray-500">מחזור 2025</p><p className="text-xl font-bold text-gray-600">₪{fmt(store.sales_2025)}</p></div>
     </div>
-    
-    {/* v1.8 - Monthly Sales Chart - מיד אחרי הקוביות */}
-    <MonthlySalesChart data={store.monthly_qty} title={`מכירות חודשיות 2025 - ${store.name}`} />
-    
-    <div className="bg-white rounded-2xl shadow-lg p-6 border"><h3 className="text-lg font-bold mb-4">מגמת כמויות</h3><ResponsiveContainer width="100%" height={250}><AreaChart data={chart}><defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" tick={{fontSize:10}} /><YAxis tickFormatter={v => fmt(v)} tick={{fontSize:10}} /><Tooltip formatter={v => fmt(v)} /><Area type="monotone" dataKey="qty" stroke="#3b82f6" fill="url(#sg)" name="כמות" /></AreaChart></ResponsiveContainer></div>
+    {/* v1.8.1 - Monthly Sales Chart (Table + Graph combined) */}
+    <MonthlySalesChart data={store.monthly_qty} store={store} title={`מכירות חודשיות - ${store.name}`} />
+    <div className="bg-white rounded-2xl shadow-lg p-6 border"><h3 className="text-lg font-bold mb-4">מגמת כמויות (כל התקופה)</h3><ResponsiveContainer width="100%" height={250}><AreaChart data={chart}><defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" tick={{fontSize:10}} /><YAxis tickFormatter={v => fmt(v)} tick={{fontSize:10}} /><Tooltip formatter={v => fmt(v)} /><Area type="monotone" dataKey="qty" stroke="#3b82f6" fill="url(#sg)" name="כמות" /></AreaChart></ResponsiveContainer></div>
     {pieData.length > 0 && <div className="bg-white rounded-2xl shadow-lg p-6 border">
       <h3 className="text-lg font-bold mb-4">🥧 חלוקת מוצרים (TOP 10) {excludedProducts.length > 0 && <span className="text-sm font-normal text-orange-600">({excludedProducts.length} מוצרים מוחרגים)</span>}</h3>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1619,21 +3134,22 @@ const StoreDetail = ({ store, onBack, allStores, excludedProducts = [], sourceWi
         ))}
       </div>
     </div>}
-    
     <div className="bg-white rounded-2xl shadow-lg p-6 border"><h3 className="text-lg font-bold mb-4">מוצרים בחנות ({prods.length}{excludedProducts.length > 0 ? ` מתוך ${allProds.length}` : ''})</h3>{prods.length > 0 ? <Table data={prods} cols={prodCols} name={'store_' + store.id + '_products'} compact /> : <p className="text-gray-500 text-center py-8">אין נתונים</p>}</div>
     
-    {/* v1.8 - Missing Products Table */}
-    <MissingProductsTable store={store} storeProducts={prods} />
+    {/* v1.8.1 - Missing Products Table */}
+    <MissingProductsTable store={store} storeProducts={prods} allStores={allStores} />
   </div>);
 };
 
 // Fixed ProductsList with proper filter alignment
-const ProductsList = ({ products, onSelect }) => {
-  const [cats, setCats] = useState([]);
-  const [statusesLong, setStatusesLong] = useState([]);
-  const [statusesShort, setStatusesShort] = useState([]);
-  const [minQty, setMinQty] = useState(0);
-  const [fallbackFilter, setFallbackFilter] = useState('all');
+const ProductsList = ({ products, onSelect, filters, onFiltersChange }) => {
+  // v1.8.8 - Use controlled filters from parent for history preservation
+  const { cats, statusesLong, statusesShort, minQty, fallbackFilter, search: tableSearch, page: tablePage } = filters;
+  
+  // Helper to update a single filter
+  const updateFilter = (key, value) => {
+    onFiltersChange({ ...filters, [key]: value, page: key !== 'page' ? 1 : value });
+  };
   
   const filtered = useMemo(() => products.filter(p => { 
     if (cats.length && !cats.includes(p.category)) return false; 
@@ -1647,13 +3163,12 @@ const ProductsList = ({ products, onSelect }) => {
   
   const cols = [
     { k: 'name', l: 'מוצר', r: (v, r) => <div className="min-w-[100px]"><p className="font-medium text-sm leading-tight">{v}</p><p className="text-xs text-gray-500">{r.category}</p></div> },
-    { k: 'status_long', l: 'סטטוס', r: (v, r) => <StatusBadge item={r} /> },
-    { k: 'metric_long_term', l: 'טווח ארוך', t: METRIC_TIPS['long_term'], r: (v) => <LongTermCell value={v} /> },
-    { k: 'metric_short_term', l: 'טווח קצר', t: METRIC_TIPS['short_term'], r: (v, r) => <ShortTermCell value={v} ok={r.short_term_ok} /> },
+    { k: 'status_long', l: 'סטטוס\nארוך', r: (v, r) => <LongTermBadge status={r.status_long || 'יציב'} isFallback={r.is_fallback} /> },
     { k: 'metric_12v12', l: 'שנתי\n24→25', t: METRIC_TIPS['12v12'], r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
-    { k: 'metric_6v6', l: '6 חודשים', t: METRIC_TIPS['6v6'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev6} to={r.qty_last6} /> },
     { k: 'metric_3v3', l: '3 חודשים', t: METRIC_TIPS['3v3'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev3} to={r.qty_last3} /> },
+    { k: 'metric_6v6', l: '6 חודשים', t: METRIC_TIPS['6v6'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev6} to={r.qty_last6} /> },
     { k: 'metric_2v2', l: '2 חודשים', t: METRIC_TIPS['2v2'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev2} to={r.qty_last2} /> },
+    { k: 'status_short', l: 'סטטוס\nקצר', r: (v, r) => <ShortTermBadge status={r.status_short || 'יציב'} /> },
     { k: 'metric_peak_distance', l: 'מרחק מהשיא', t: METRIC_TIPS['peak'], r: (v, r) => <PeakCell pct={v} peak={r.peak_value} current={r.current_value} /> },
     { k: 'returns_pct_last6', l: 'חזרות %', t: METRIC_TIPS['returns'], r: (v, r) => <ReturnsCell pctL6={v} pctP6={r.returns_pct_prev6} change={r.returns_change} /> },
     { k: 'total_sales', l: 'מחזור', r: v => <span className="font-bold text-gray-600">₪{fmt(v)}</span> },
@@ -1666,21 +3181,17 @@ const ProductsList = ({ products, onSelect }) => {
       <button onClick={() => exportPDF('מוצרים - Baron')} className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl text-sm print:hidden"><FileText size={16}/>PDF</button>
     </div>
     <div className="flex flex-wrap gap-3 items-center print:hidden">
-      <MultiSelect opts={FILTERS.categories || []} selected={cats} onChange={setCats} placeholder="קטגוריה" />
-      <MultiSelect opts={['עליה חדה','צמיחה','יציב','ירידה','התרסקות']} selected={statusesLong} onChange={setStatusesLong} placeholder="סטטוס ארוך" />
-      <MultiSelect opts={['עליה חדה','יציב','ירידה','אזעקה']} selected={statusesShort} onChange={setStatusesShort} placeholder="סטטוס קצר" />
-      <select value={fallbackFilter} onChange={e => setFallbackFilter(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-xl text-sm">
+      <MultiSelect opts={FILTERS.categories || []} selected={cats} onChange={(v) => updateFilter('cats', v)} placeholder="קטגוריה" />
+      <MultiSelect opts={['עליה חדה','צמיחה','יציב','ירידה','התרסקות']} selected={statusesLong} onChange={(v) => updateFilter('statusesLong', v)} placeholder="סטטוס ארוך" />
+      <MultiSelect opts={['עליה חדה','יציב','ירידה','אזעקה']} selected={statusesShort} onChange={(v) => updateFilter('statusesShort', v)} placeholder="סטטוס קצר" />
+      <select value={fallbackFilter} onChange={e => updateFilter('fallbackFilter', e.target.value)} className="px-3 py-2 border border-gray-200 rounded-xl text-sm">
         <option value="all">סוג סטטוס</option>
         <option value="regular">רגיל בלבד</option>
         <option value="fallback">⚠️ גיבוי בלבד</option>
       </select>
-      <input type="number" value={minQty || ''} onChange={e => setMinQty(Number(e.target.value) || 0)} placeholder="מינ׳ 2025" className="w-32 px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+      <input type="number" value={minQty || ''} onChange={e => updateFilter('minQty', Number(e.target.value) || 0)} placeholder="מינ׳ 2025" className="w-32 px-3 py-2 border border-gray-200 rounded-xl text-sm" />
     </div>
-    
-    {/* v1.8 - Monthly Sales Chart for all products */}
-    <MonthlySalesChart data={filtered} title="מכירות חודשיות 2025 - כל המוצרים" />
-    
-    <Table data={filtered} cols={cols} onRow={onSelect} name="products" />
+    <Table data={filtered} cols={cols} onRow={onSelect} name="products" search={tableSearch} onSearchChange={(v) => updateFilter('search', v)} page={tablePage} onPageChange={(v) => updateFilter('page', v)} />
   </div>)
 };
 
@@ -1694,13 +3205,12 @@ const ProductDetail = ({ product, onBack, rulesConfig }) => {
   
   const storeCols = [
     { k: 'name', l: 'חנות', r: (v, r) => <div className="min-w-[120px]"><p className="font-medium text-sm leading-tight">{v}</p><p className="text-xs text-gray-500">{r.city}</p></div> },
-    { k: 'status_long', l: 'סטטוס', r: (v, r) => <StatusBadge item={r} sm /> },
-    { k: 'metric_long_term', l: 'טווח ארוך', t: METRIC_TIPS['long_term'], r: (v) => <LongTermCell value={v} /> },
-    { k: 'metric_short_term', l: 'טווח קצר', t: METRIC_TIPS['short_term'], r: (v, r) => <ShortTermCell value={v} ok={r.short_term_ok} /> },
+    { k: 'status_long', l: 'סטטוס\nארוך', r: (v, r) => <LongTermBadge status={r.status_long || 'יציב'} sm isFallback={r.is_fallback} /> },
     { k: 'metric_12v12', l: 'שנתי\n24→25', t: METRIC_TIPS['12v12'], r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
-    { k: 'metric_6v6', l: '6 חודשים', t: METRIC_TIPS['6v6'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev6} to={r.qty_last6} /> },
     { k: 'metric_3v3', l: '3 חודשים', t: METRIC_TIPS['3v3'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev3} to={r.qty_last3} /> },
+    { k: 'metric_6v6', l: '6 חודשים', t: METRIC_TIPS['6v6'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev6} to={r.qty_last6} /> },
     { k: 'metric_2v2', l: '2 חודשים', t: METRIC_TIPS['2v2'], r: (v, r) => <MetricCell pct={v} from={r.qty_prev2} to={r.qty_last2} /> },
+    { k: 'status_short', l: 'סטטוס\nקצר', r: (v, r) => <ShortTermBadge status={r.status_short || 'יציב'} sm /> },
     { k: 'metric_peak_distance', l: 'מרחק מהשיא', t: METRIC_TIPS['peak'], r: (v, r) => <PeakCell pct={v} peak={r.peak_value} current={r.current_value} /> },
     { k: 'returns_pct_last6', l: 'חזרות %', t: METRIC_TIPS['returns'], r: (v, r) => {
       const pctL6 = r.returns_pct_last6 ?? v ?? 0;
@@ -1736,11 +3246,9 @@ const ProductDetail = ({ product, onBack, rulesConfig }) => {
       <div className="bg-white rounded-xl shadow p-4 text-center"><p className="text-sm text-gray-500">חזרות % (H2)</p><p className="text-xl font-bold text-gray-600">{(product.returns_pct_last6 || 0).toFixed(1)}%</p></div>
       <div className="bg-white rounded-xl shadow p-4 text-center"><p className="text-sm text-gray-500">מחזור</p><p className="text-xl font-bold text-gray-600">₪{fmt(product.total_sales)}</p></div>
     </div>
-    
-    {/* v1.8 - Monthly Sales Chart - מיד אחרי הקוביות */}
-    <MonthlySalesChart data={product.monthly_qty} title={`מכירות חודשיות 2025 - ${product.name}`} />
-    
-    <div className="bg-white rounded-2xl shadow-lg p-6 border"><h3 className="text-lg font-bold mb-4">מגמת כמויות</h3><ResponsiveContainer width="100%" height={250}><AreaChart data={chart}><defs><linearGradient id="pg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/><stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" tick={{fontSize:10}} /><YAxis tickFormatter={v => fmt(v)} tick={{fontSize:10}} /><Tooltip formatter={v => fmt(v)} /><Area type="monotone" dataKey="qty" stroke="#8b5cf6" fill="url(#pg)" name="כמות" /></AreaChart></ResponsiveContainer></div>
+    {/* v1.8.1 - Monthly Sales Chart (Table + Graph combined) */}
+    <MonthlySalesChart data={product.monthly_qty} title={`מכירות חודשיות - ${product.name}`} />
+    <div className="bg-white rounded-2xl shadow-lg p-6 border"><h3 className="text-lg font-bold mb-4">מגמת כמויות (כל התקופה)</h3><ResponsiveContainer width="100%" height={250}><AreaChart data={chart}><defs><linearGradient id="pg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/><stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" tick={{fontSize:10}} /><YAxis tickFormatter={v => fmt(v)} tick={{fontSize:10}} /><Tooltip formatter={v => fmt(v)} /><Area type="monotone" dataKey="qty" stroke="#8b5cf6" fill="url(#pg)" name="כמות" /></AreaChart></ResponsiveContainer></div>
     <div className="bg-white rounded-2xl shadow-lg p-6 border">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-bold">חנויות שמוכרות ({stores.length}{minQty > 0 ? ` מתוך ${allStores.length}` : ''})</h3>
@@ -1761,19 +3269,15 @@ const Alerts = ({ stores, onSelect }) => {
   const [driverFilter, setDriverFilter] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [minQty, setMinQty] = useState(0);
-  const [hideInactive, setHideInactive] = useState(true);
   const [sortBy, setSortBy] = useState('metric'); // 'metric' or 'qty'
   
   React.useEffect(() => { setAlertConfigState(getAlertConfig()); }, []);
   
-  // Get all alerts based on config (filter inactive first if needed)
+  // v1.8.9 - stores is already filtered for active only
   const allAlerts = useMemo(() => {
-    let base = stores;
-    if (hideInactive) base = base.filter(s => !s.is_inactive);
-    
-    return base.filter(s => isAlert(s, alertConfig))
+    return stores.filter(s => isAlert(s, alertConfig))
       .map(s => ({ ...s, alertReason: getAlertReason(s, alertConfig) }));
-  }, [stores, alertConfig, hideInactive]);
+  }, [stores, alertConfig]);
   
   // Get unique values for filters
   const uniqueStatuses = useMemo(() => [...new Set(allAlerts.map(s => s.status_long))], [allAlerts]);
@@ -1840,10 +3344,6 @@ const Alerts = ({ stores, onSelect }) => {
           <input type="range" min="0" max={maxQty} step="100" value={minQty} onChange={e => setMinQty(Number(e.target.value))} className="flex-1" />
           <span className="text-sm font-bold text-blue-600 w-16 text-left">{fmt(minQty)}</span>
         </div>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" checked={hideInactive} onChange={e => setHideInactive(e.target.checked)} className="w-4 h-4 rounded" />
-          <span className="text-sm text-gray-600">הסתר חנויות לא פעילות</span>
-        </label>
         {hasFilters && (
           <button onClick={() => { setStatusFilter([]); setCityFilter([]); setDriverFilter([]); setSearchTerm(''); setMinQty(0); }} className="px-3 py-1.5 bg-gray-100 rounded-xl text-sm hover:bg-gray-200">נקה סינון</button>
         )}
@@ -1886,19 +3386,20 @@ const Alerts = ({ stores, onSelect }) => {
                     <tr key={idx} className="border-b border-gray-200">
                       <td className="py-1 px-1 font-medium text-gray-800">{row.name}</td>
                       <td className="py-1 px-1 text-gray-500 text-xs">{row.period}</td>
-                      <td className="py-1 px-1 text-center text-gray-700">{row.rule}</td>
-                      <td className={`py-1 px-1 text-center font-bold ${row.passed ? 'text-emerald-600' : 'text-red-600'}`}>{row.actual}</td>
+                      <td className="py-1 px-1 text-center text-gray-700">{row.rule || '-'}</td>
+                      <td className={`py-1 px-1 text-center font-bold ${(row.actualValue || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{row.actual}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           )}
-          <div className="grid grid-cols-4 gap-2 text-center">
+          <div className="grid grid-cols-5 gap-2 text-center">
             <div className="bg-purple-50 rounded-lg p-2"><p className="text-xs text-gray-500">כמות 2025</p><p className="font-bold text-purple-600">{fmt(s.qty_2025)}</p></div>
-            <div className="bg-red-50 rounded-lg p-2"><p className="text-xs text-gray-500">שנתי</p><p className="font-bold text-red-600">{fmtPct(s.metric_12v12)}</p></div>
+            <div className="bg-red-50 rounded-lg p-2"><p className="text-xs text-gray-500">שנתי</p><p className={`font-bold ${(s.metric_12v12 || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmtPct(s.metric_12v12)}</p></div>
             <div className="bg-orange-50 rounded-lg p-2"><p className="text-xs text-gray-500">חצי שנתי</p><p className={`font-bold ${(s.metric_6v6 || 0) >= 0 ? 'text-emerald-600' : 'text-orange-600'}`}>{fmtPct(s.metric_6v6)}</p></div>
             <div className="bg-blue-50 rounded-lg p-2"><p className="text-xs text-gray-500">רבעוני</p><p className={`font-bold ${(s.metric_3v3 || 0) >= 0 ? 'text-emerald-600' : 'text-blue-600'}`}>{fmtPct(s.metric_3v3)}</p></div>
+            <div className="bg-cyan-50 rounded-lg p-2"><p className="text-xs text-gray-500">2 חודשים</p><p className={`font-bold ${(s.metric_2v2 || 0) >= 0 ? 'text-emerald-600' : 'text-cyan-600'}`}>{fmtPct(s.metric_2v2)}</p></div>
           </div>
         </div>
       );
@@ -1908,9 +3409,10 @@ const Alerts = ({ stores, onSelect }) => {
 
 const Rankings = ({ stores, onSelect }) => {
   // Recovery = stores with negative long-term but positive short-term (2 months)
+  // v1.8.9 - stores is already filtered for active only
   const r = useMemo(() => ({
     qty: [...stores].sort((a,b) => (b.qty_total||0)-(a.qty_total||0)).slice(0,30),
-    growth: [...stores].filter(s=>!s.is_inactive).sort((a,b) => (b.metric_12v12||0)-(a.metric_12v12||0)).slice(0,30),
+    growth: [...stores].sort((a,b) => (b.metric_12v12||0)-(a.metric_12v12||0)).slice(0,30),
     recovery: [...stores].filter(s => s.is_recovering || (s.status_long === 'ירידה' || s.status_long === 'התרסקות') && s.status_short === 'עליה חדה').slice(0,30)
   }), [stores]);
   const List = ({ title, data, icon, bg, showGrowth, showRecovery }) => (
@@ -1949,40 +3451,97 @@ const Rankings = ({ stores, onSelect }) => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <List title="לפי כמות כוללת" data={r.qty} icon="🏆" bg="bg-blue-500" />
         <List title="לפי צמיחה" data={r.growth} icon="📈" bg="bg-emerald-500" showGrowth />
-        <List title="התאוששות" data={r.recovery} icon="💪" bg="bg-amber-500" showRecovery />
+        <List title="התאוששות" data={r.recovery} icon="💪" bg="bg-blue-500" showRecovery />
       </div>
     </div>
   );
 };
 
 const Inactive = ({ stores, onSelect }) => {
-  const list = useMemo(() => stores.filter(s => s.is_inactive).sort((a,b) => (b.last_active_month||0)-(a.last_active_month||0)), [stores]);
+  // v1.8.9 - stores is already filtered for inactive, just sort
+  const list = useMemo(() => [...stores].sort((a,b) => (b.last_active_month||0)-(a.last_active_month||0)), [stores]);
   return (<div className="space-y-4"><div className="flex justify-between items-center"><h2 className="text-xl font-bold">לא פעילות ({list.length})</h2><button onClick={() => exportPDF('לא פעילות - Baron')} className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl text-sm print:hidden"><FileText size={16}/>PDF</button></div>{list.length === 0 ? <div className="bg-white rounded-2xl shadow-lg p-12 text-center"><Check className="mx-auto text-emerald-500 mb-4" size={48}/><p className="text-gray-600">כל החנויות פעילות!</p></div> : <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{list.map(s => <div key={s.id} onClick={() => onSelect(s)} className="bg-white rounded-2xl shadow p-5 border hover:border-gray-400 cursor-pointer"><div className="flex justify-between items-start mb-3"><div><h3 className="font-bold">{s.name}</h3><p className="text-sm text-gray-500">{s.city}</p></div><XCircle className="text-red-400" size={20}/></div><div className="space-y-1 text-sm"><p className="text-gray-500">כמות כוללת: <span className="font-semibold">{fmt(s.qty_total)}</span></p><p className="text-gray-500">מחזור: <span className="font-semibold">₪{fmt(s.total_sales)}</span></p><p className="text-red-600 font-medium mt-2">פעילות אחרונה: {fmtMonthHeb(s.last_active_month)}</p></div></div>)}</div>}</div>);
 };
 
 const Trends = ({ stores, products, onDrillDown }) => {
   const trend = useMemo(() => { const m = {}; stores.forEach(s => { if (s.monthly_qty) Object.entries(s.monthly_qty).forEach(([k,v]) => { m[k] = (m[k]||0) + v; }); }); return Object.entries(m).sort(([a],[b]) => Number(a)-Number(b)).map(([k,v]) => ({ month: fmtMonth(k), value: v })); }, [stores]);
   
-  // v1.3 - Split category charts with proper names
-  const catsTop10 = useMemo(() => { 
-    const c = {}; 
-    products.forEach(p => { if (p.category) c[p.category] = (c[p.category]||0) + (p.qty_total||0); }); 
-    return Object.entries(c).sort(([,a],[,b]) => b-a).slice(0,10).map(([n,v]) => ({ 
-      name: n.length > 25 ? n.slice(0,23) + '...' : n, 
-      fullName: n,
-      value: v 
-    })); 
-  }, [products]);
+  // v1.10.7 - Returns trend (% per month)
+  const returnsTrend = useMemo(() => {
+    const months = {};
+    stores.forEach(s => {
+      if (s.monthly_gross && s.monthly_returns) {
+        Object.entries(s.monthly_gross).forEach(([m, gross]) => {
+          if (!months[m]) months[m] = { gross: 0, returns: 0 };
+          months[m].gross += gross || 0;
+          months[m].returns += s.monthly_returns[m] || 0;
+        });
+      }
+    });
+    return Object.entries(months)
+      .sort(([a], [b]) => Number(a) - Number(b))
+      .map(([k, v]) => ({
+        month: fmtMonth(k),
+        returnsPct: v.gross > 0 ? (v.returns / v.gross * 100) : 0
+      }));
+  }, [stores]);
   
-  const cats11to20 = useMemo(() => { 
-    const c = {}; 
-    products.forEach(p => { if (p.category) c[p.category] = (c[p.category]||0) + (p.qty_total||0); }); 
-    return Object.entries(c).sort(([,a],[,b]) => b-a).slice(10,20).map(([n,v]) => ({ 
-      name: n.length > 25 ? n.slice(0,23) + '...' : n,
-      fullName: n, 
-      value: v 
-    })); 
-  }, [products]);
+  // v1.10.7 - Deliveries trend
+  const deliveriesTrend = useMemo(() => {
+    const months = {};
+    stores.forEach(s => {
+      if (s.monthly_deliveries) {
+        Object.entries(s.monthly_deliveries).forEach(([m, v]) => {
+          months[m] = (months[m] || 0) + (v || 0);
+        });
+      }
+    });
+    return Object.entries(months)
+      .sort(([a], [b]) => Number(a) - Number(b))
+      .map(([k, v]) => ({ month: fmtMonth(k), deliveries: v }));
+  }, [stores]);
+  
+  // v1.10.7 - Gross vs Net comparison by month
+  const grossNetTrend = useMemo(() => {
+    const months = {};
+    stores.forEach(s => {
+      if (s.monthly_gross || s.monthly_net) {
+        const grossData = s.monthly_gross || {};
+        const netData = s.monthly_net || s.monthly_qty || {};
+        Object.keys({ ...grossData, ...netData }).forEach(m => {
+          if (!months[m]) months[m] = { gross: 0, net: 0 };
+          months[m].gross += grossData[m] || 0;
+          months[m].net += netData[m] || 0;
+        });
+      }
+    });
+    return Object.entries(months)
+      .sort(([a], [b]) => Number(a) - Number(b))
+      .map(([k, v]) => ({ month: fmtMonth(k), gross: v.gross, net: v.net }));
+  }, [stores]);
+  
+  // v1.10.7 - Returns by city (top 10 worst)
+  const returnsByCity = useMemo(() => {
+    const cities = {};
+    stores.forEach(s => {
+      if (s.city) {
+        if (!cities[s.city]) cities[s.city] = { name: s.city, gross: 0, returns: 0, count: 0 };
+        // Sum last 6 months
+        if (s.monthly_gross && s.monthly_returns) {
+          ['202507','202508','202509','202510','202511','202512'].forEach(m => {
+            cities[s.city].gross += s.monthly_gross[m] || 0;
+            cities[s.city].returns += s.monthly_returns[m] || 0;
+          });
+        }
+        cities[s.city].count++;
+      }
+    });
+    return Object.values(cities)
+      .map(c => ({ ...c, returnsPct: c.gross > 0 ? (c.returns / c.gross * 100) : 0 }))
+      .filter(c => c.gross > 100) // Only cities with meaningful data
+      .sort((a, b) => b.returnsPct - a.returnsPct)
+      .slice(0, 10);
+  }, [stores]);
   
   // v1.4 - Driver performance with H1 vs H2 comparison
   const byDriverH = useMemo(() => { 
@@ -2039,42 +3598,6 @@ const Trends = ({ stores, products, onDrillDown }) => {
       </div>
     </div>
     
-    {/* Category charts with better labels */}
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div className="bg-white rounded-2xl shadow-lg p-4 md:p-6 border">
-        <h3 className="text-lg font-bold mb-4">🏆 קטגוריות מובילות (1-10)</h3>
-        <div className="w-full overflow-x-auto">
-          <div className="min-w-[320px]">
-            <ResponsiveContainer width="100%" height={380}>
-              <BarChart data={catsTop10} layout="vertical" margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3"/>
-                <XAxis type="number" tickFormatter={v => (v/1000).toFixed(0)+'K'} tick={{fontSize:10}}/>
-                <YAxis type="category" dataKey="name" width={140} tick={{fontSize:9}} interval={0}/>
-                <Tooltip formatter={v => fmt(v)} labelFormatter={(label, payload) => payload[0]?.payload?.fullName || label}/>
-                <Bar dataKey="value" fill="#8b5cf6" radius={[0,4,4,0]}/>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-      <div className="bg-white rounded-2xl shadow-lg p-4 md:p-6 border">
-        <h3 className="text-lg font-bold mb-4">📊 קטגוריות (11-20)</h3>
-        <div className="w-full overflow-x-auto">
-          <div className="min-w-[320px]">
-            <ResponsiveContainer width="100%" height={380}>
-              <BarChart data={cats11to20} layout="vertical" margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3"/>
-                <XAxis type="number" tickFormatter={v => (v/1000).toFixed(0)+'K'} tick={{fontSize:10}}/>
-                <YAxis type="category" dataKey="name" width={140} tick={{fontSize:9}} interval={0}/>
-                <Tooltip formatter={v => fmt(v)} labelFormatter={(label, payload) => payload[0]?.payload?.fullName || label}/>
-                <Bar dataKey="value" fill="#14b8a6" radius={[0,4,4,0]}/>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-    </div>
-    
     {/* Performance tables with clear headers - H1 vs H2 */}
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div className="bg-white rounded-2xl shadow-lg p-4 md:p-6 border">
@@ -2124,6 +3647,75 @@ const Trends = ({ stores, products, onDrillDown }) => {
               <span className="w-14 md:w-16 text-center text-gray-600 text-xs md:text-sm flex-shrink-0">{fmt(d.qty_h1)}</span>
               <span className="w-14 md:w-16 text-center text-gray-600 text-xs md:text-sm flex-shrink-0">{fmt(d.qty_h2)}</span>
               <span className={`w-14 md:w-16 text-center font-bold text-xs md:text-sm flex-shrink-0 ${d.change >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmtPct(d.change)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+    
+    {/* v1.10.7 - New charts: Returns, Deliveries, Gross vs Net */}
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Returns % Trend */}
+      <div className="bg-white rounded-2xl shadow-lg p-4 md:p-6 border">
+        <h3 className="text-lg font-bold mb-2">📉 מגמת אחוז חזרות</h3>
+        <p className="text-xs text-gray-500 mb-3">אחוז החזרות מתוך הברוטו לפי חודש</p>
+        <ResponsiveContainer width="100%" height={250}>
+          <LineChart data={returnsTrend} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3"/>
+            <XAxis dataKey="month" tick={{fontSize:10}} interval="preserveStartEnd"/>
+            <YAxis tickFormatter={v => v.toFixed(0) + '%'} tick={{fontSize:10}} width={40}/>
+            <Tooltip formatter={v => v.toFixed(1) + '%'}/>
+            <Line type="monotone" dataKey="returnsPct" stroke="#ef4444" strokeWidth={3} dot={{r:2}} name="חזרות %"/>
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+      
+      {/* Deliveries Trend */}
+      <div className="bg-white rounded-2xl shadow-lg p-4 md:p-6 border">
+        <h3 className="text-lg font-bold mb-2">🚚 מגמת אספקות</h3>
+        <p className="text-xs text-gray-500 mb-3">מספר אספקות לפי חודש</p>
+        <ResponsiveContainer width="100%" height={250}>
+          <BarChart data={deliveriesTrend} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3"/>
+            <XAxis dataKey="month" tick={{fontSize:10}} interval="preserveStartEnd"/>
+            <YAxis tick={{fontSize:10}} width={40}/>
+            <Tooltip formatter={v => fmt(v)}/>
+            <Bar dataKey="deliveries" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="אספקות"/>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+    
+    {/* Gross vs Net & Returns by City */}
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Gross vs Net */}
+      <div className="bg-white rounded-2xl shadow-lg p-4 md:p-6 border">
+        <h3 className="text-lg font-bold mb-2">📊 ברוטו מול נטו</h3>
+        <p className="text-xs text-gray-500 mb-3">השוואה חודשית</p>
+        <ResponsiveContainer width="100%" height={250}>
+          <BarChart data={grossNetTrend} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3"/>
+            <XAxis dataKey="month" tick={{fontSize:10}} interval="preserveStartEnd"/>
+            <YAxis tickFormatter={v => (v/1000).toFixed(0) + 'K'} tick={{fontSize:10}} width={40}/>
+            <Tooltip formatter={v => fmt(v)}/>
+            <Legend formatter={v => v === 'gross' ? 'ברוטו' : 'נטו'}/>
+            <Bar dataKey="gross" fill="#3b82f6" name="gross" radius={[4, 4, 0, 0]}/>
+            <Bar dataKey="net" fill="#10b981" name="net" radius={[4, 4, 0, 0]}/>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      
+      {/* Returns by City */}
+      <div className="bg-white rounded-2xl shadow-lg p-4 md:p-6 border">
+        <h3 className="text-lg font-bold mb-2">🏙️ חזרות לפי עיר</h3>
+        <p className="text-xs text-gray-500 mb-3">10 הערים עם אחוז החזרות הגבוה ביותר (H2 2025)</p>
+        <div className="space-y-2 max-h-64 overflow-y-auto">
+          {returnsByCity.map((c, i) => (
+            <div key={c.name} onClick={() => onDrillDown && onDrillDown({ type: 'city', value: c.name })} className="flex items-center gap-2 p-2 bg-red-50 rounded-lg cursor-pointer hover:bg-red-100 transition-colors text-sm">
+              <span className="w-6 h-6 flex items-center justify-center bg-red-500 text-white rounded text-xs font-bold">{i+1}</span>
+              <span className="flex-1 font-medium">{c.name}</span>
+              <span className="text-gray-500 text-xs">{c.count} חנויות</span>
+              <span className="font-bold text-red-600">{c.returnsPct.toFixed(1)}%</span>
             </div>
           ))}
         </div>
@@ -2842,7 +4434,7 @@ const SettingsPage = ({ onLogout }) => {
         <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-blue-600">{STORES_RAW.length}</p><p className="text-xs text-gray-500">חנויות</p></div>
         <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-purple-600">{PRODUCTS_RAW.length}</p><p className="text-xs text-gray-500">מוצרים</p></div>
         <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-emerald-600">{STORES_RAW.filter(s => !s.is_inactive).length}</p><p className="text-xs text-gray-500">חנויות פעילות</p></div>
-        <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-gray-600">v1.8</p><p className="text-xs text-gray-500">גרסה</p></div>
+        <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-gray-600">v1.10.7</p><p className="text-xs text-gray-500">גרסה</p></div>
       </div>
       <p className="text-xs text-gray-400 text-center mt-4">עדכון אחרון: ינואר 2026</p>
     </div>
@@ -2860,7 +4452,7 @@ const SettingsPage = ({ onLogout }) => {
 // Baron Logo Component - using actual image
 const BaronLogo = () => (
   <div className="flex items-center gap-3">
-    <img src="/baron-logo.png" alt="ברון" className="h-10 w-auto" />
+    <img src="/baron-logo.jpg" alt="ברון" className="h-10 w-auto" />
   </div>
 );
 
@@ -3011,6 +4603,98 @@ export default function App() {
   const [sourceWindow, setSourceWindow] = useState(null);
   const [drillDownFilter, setDrillDownFilter] = useState(null);
   
+  // v1.10.7 - Global store comparison modal
+  const [showGlobalComparison, setShowGlobalComparison] = useState(false);
+  
+  // v1.8.8 - Stores list filters (lifted up for history preservation)
+  const [storesFilters, setStoresFilters] = useState({
+    cities: [], networks: [], drivers: [], agents: [],
+    statusesLong: [], statusesShort: [], minQty: 0,
+    fallbackFilter: 'all', search: '', page: 1
+  });
+  
+  // v1.8.8 - Products list filters
+  const [productsFilters, setProductsFilters] = useState({
+    cats: [], statusesLong: [], statusesShort: [], minQty: 0,
+    fallbackFilter: 'all', search: '', page: 1
+  });
+  
+  // v1.9.0 - Simple navigation history stack (using ref for popstate compatibility)
+  const navHistoryRef = useRef([]);
+  const [, forceUpdate] = useState(0); // For re-render after popFromHistory
+  
+  // Push current state to history before navigating
+  const pushToHistory = () => {
+    const currentState = {
+      tab,
+      store,
+      product,
+      sourceWindow,
+      drillDownFilter,
+      storesFilters: { ...storesFilters },
+      productsFilters: { ...productsFilters },
+      timestamp: Date.now()
+    };
+    navHistoryRef.current = [...navHistoryRef.current, currentState];
+  };
+  
+  // Pop from history (go back)
+  const popFromHistory = () => {
+    if (navHistoryRef.current.length === 0) return false;
+    
+    const newHistory = [...navHistoryRef.current];
+    const prevState = newHistory.pop();
+    navHistoryRef.current = newHistory;
+    
+    // Restore state
+    setTab(prevState.tab);
+    setStore(prevState.store);
+    setProduct(prevState.product);
+    setSourceWindow(prevState.sourceWindow);
+    setDrillDownFilter(prevState.drillDownFilter);
+    setStoresFilters(prevState.storesFilters);
+    setProductsFilters(prevState.productsFilters);
+    
+    return true;
+  };
+  
+  // Clear history
+  const clearHistory = () => {
+    navHistoryRef.current = [];
+  };
+  
+  // v1.10.7 - Browser back button support (improved for mobile)
+  useEffect(() => {
+    // Create large buffer of history entries to prevent exiting PWA
+    const createBuffer = () => {
+      for (let i = 0; i < 10; i++) {
+        window.history.pushState({ app: 'baron', i }, '', window.location.pathname);
+      }
+    };
+    
+    window.history.replaceState({ app: 'baron', i: 0 }, '', window.location.pathname);
+    createBuffer();
+    
+    const handlePopState = (event) => {
+      // Immediately push new states to maintain buffer
+      window.history.pushState({ app: 'baron', i: Date.now() }, '', window.location.pathname);
+      window.history.pushState({ app: 'baron', i: Date.now() + 1 }, '', window.location.pathname);
+      
+      // Navigate back in our internal history
+      popFromHistory();
+    };
+    
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+  
+  // Update browser history when navigating to store/product
+  useEffect(() => {
+    if (store || product) {
+      window.history.pushState({ app: 'baron', index: Date.now() }, '', window.location.pathname);
+    }
+  }, [store, product]);
+  
   useEffect(() => { 
     setRulesConfig(getConfig()); 
     setLoggedInState(isLoggedIn());
@@ -3072,6 +4756,10 @@ export default function App() {
     return configured.filter(s => !allExcludedStores.includes(s.id));
   }, [rulesConfig, allExcludedStores]);
   
+  // v1.8.9 - Separate active and inactive stores
+  const ACTIVE_STORES = useMemo(() => STORES.filter(s => !s.is_inactive), [STORES]);
+  const INACTIVE_STORES = useMemo(() => STORES.filter(s => s.is_inactive), [STORES]);
+  
   const PRODUCTS = useMemo(() => {
     const configured = applyConfig(PRODUCTS_RAW, rulesConfig);
     return configured.filter(p => !allExcludedProducts.includes(p.id));
@@ -3089,33 +4777,89 @@ export default function App() {
   ];
   
   // v1.3 - Track source when navigating to detail
+  // v1.9.0 - Updated with internal history stack
   const nav = (t, i) => { 
-    setSourceWindow(tab); // Remember where we came from
+    pushToHistory(); // Save current state before navigating
+    const newSourceWindow = tab;
+    setSourceWindow(newSourceWindow);
     if (t === 'store') { 
       setStore(i); 
-      setTab('stores'); 
+      setTab('stores');
     } else { 
       setProduct(i); 
-      setTab('products'); 
+      setTab('products');
     } 
   };
   
   // v1.3 - Handle drill-down from summary tables
+  // v1.9.0 - Updated with internal history stack
   const handleDrillDown = (filter) => {
+    pushToHistory(); // Save current state before navigating
+    const newSourceWindow = tab;
     setDrillDownFilter(filter);
-    setSourceWindow(tab);
+    setSourceWindow(newSourceWindow);
+    
+    // v1.10.7 - Navigate to alerts tab if type is alerts
+    if (filter && filter.type === 'alerts') {
+      setTab('alerts');
+      return;
+    }
+    
     setTab('stores');
+    // Apply filter to stores filters
+    const newFilters = { ...storesFilters, cities: [], networks: [], drivers: [], agents: [], statusesLong: [], statusesShort: [] };
+    if (filter) {
+      if (filter.type === 'city') newFilters.cities = [filter.value];
+      else if (filter.type === 'status_long') newFilters.statusesLong = [filter.value];
+      else if (filter.type === 'status_short') newFilters.statusesShort = [filter.value];
+      else if (filter.type === 'driver') newFilters.drivers = [filter.value];
+      else if (filter.type === 'network') newFilters.networks = [filter.value];
+      else if (filter.type === 'agent') newFilters.agents = [filter.value];
+      else if (filter.type === 'fallback') newFilters.fallbackFilter = 'fallback';
+    }
+    setStoresFilters(newFilters);
   };
   
   // v1.3 - Handle back navigation
+  // v1.9.0 - Use internal history stack
   const handleBack = () => {
+    popFromHistory();
+  };
+  
+  // v1.9.0 - Tab change (clears history to this point)
+  const handleTabChange = (newTab) => {
+    // Don't save history when changing tabs from menu - start fresh
+    setTab(newTab);
     setStore(null);
     setProduct(null);
-    if (sourceWindow) {
-      setTab(sourceWindow);
-      setSourceWindow(null);
-    }
     setDrillDownFilter(null);
+    clearHistory(); // Clear history when changing tabs
+  };
+  
+  // v1.9.0 - Store select with history
+  const handleStoreSelect = (s) => {
+    pushToHistory(); // Save current state before navigating
+    const newSourceWindow = tab;
+    setSourceWindow(newSourceWindow);
+    setStore(s);
+  };
+  
+  // v1.9.0 - Product select with history
+  const handleProductSelect = (p) => {
+    pushToHistory(); // Save current state before navigating
+    const newSourceWindow = tab;
+    setSourceWindow(newSourceWindow);
+    setProduct(p);
+  };
+  
+  // v1.9.0 - Update stores filters (no history needed for filters)
+  const updateStoresFilters = (newFilters) => {
+    setStoresFilters(newFilters);
+  };
+  
+  // v1.9.0 - Update products filters (no history needed for filters)
+  const updateProductsFilters = (newFilters) => {
+    setProductsFilters(newFilters);
   };
   
   // Get tab name for display
@@ -3125,16 +4869,16 @@ export default function App() {
   };
   
   const content = () => {
-    if (store) return <StoreDetail store={store} onBack={handleBack} allStores={STORES} excludedProducts={allExcludedProducts} sourceWindow={sourceWindow ? getTabName(sourceWindow) : null} rulesConfig={rulesConfig} />;
+    if (store) return <StoreDetail store={store} onBack={handleBack} allStores={STORES} excludedProducts={allExcludedProducts} sourceWindow={sourceWindow ? getTabName(sourceWindow) : null} rulesConfig={rulesConfig} onSelectStore={handleStoreSelect} />;
     if (product) return <ProductDetail product={product} onBack={handleBack} sourceWindow={sourceWindow ? getTabName(sourceWindow) : null} rulesConfig={rulesConfig} />;
     switch (tab) {
-      case 'overview': return <Overview stores={STORES} products={PRODUCTS} onNav={nav} onDrillDown={handleDrillDown} />;
-      case 'stores': return <StoresList stores={STORES} onSelect={(s) => { setSourceWindow(tab); setStore(s); }} initialFilter={drillDownFilter} />;
-      case 'products': return <ProductsList products={PRODUCTS} onSelect={(p) => { setSourceWindow(tab); setProduct(p); }} />;
-      case 'trends': return <Trends stores={STORES} products={PRODUCTS} onDrillDown={handleDrillDown} />;
-      case 'alerts': return <Alerts stores={STORES} onSelect={(s) => { setSourceWindow('alerts'); setStore(s); }} />;
-      case 'rankings': return <Rankings stores={STORES} onSelect={(s) => { setSourceWindow('rankings'); setStore(s); }} />;
-      case 'inactive': return <Inactive stores={STORES} onSelect={(s) => { setSourceWindow('inactive'); setStore(s); }} />;
+      case 'overview': return <Overview stores={ACTIVE_STORES} products={PRODUCTS} onNav={nav} onDrillDown={handleDrillDown} />;
+      case 'stores': return <StoresList stores={ACTIVE_STORES} onSelect={handleStoreSelect} filters={storesFilters} onFiltersChange={updateStoresFilters} />;
+      case 'products': return <ProductsList products={PRODUCTS} onSelect={handleProductSelect} filters={productsFilters} onFiltersChange={updateProductsFilters} />;
+      case 'trends': return <Trends stores={ACTIVE_STORES} products={PRODUCTS} onDrillDown={handleDrillDown} />;
+      case 'alerts': return <Alerts stores={ACTIVE_STORES} onSelect={handleStoreSelect} />;
+      case 'rankings': return <Rankings stores={ACTIVE_STORES} onSelect={handleStoreSelect} />;
+      case 'inactive': return <Inactive stores={INACTIVE_STORES} onSelect={handleStoreSelect} />;
       case 'settings': return <SettingsPage onLogout={handleLogout} />;
       default: return <Overview stores={STORES} products={PRODUCTS} onNav={nav} onDrillDown={handleDrillDown} />;
     }
@@ -3184,9 +4928,16 @@ export default function App() {
         <div className="flex items-center gap-4">
           <button onClick={() => setMenu(!menu)} className="lg:hidden p-2 hover:bg-gray-100 rounded-xl">{menu ? <X size={24}/> : <Menu size={24}/>}</button>
           <BaronLogo />
-          <span className="text-xs text-gray-400 hidden sm:inline">v1.8</span>
+          <span className="text-xs text-gray-400 hidden sm:inline">v1.10.7</span>
         </div>
         <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setShowGlobalComparison(true)} 
+            className="flex items-center gap-1 px-3 py-2 bg-emerald-500 text-white rounded-xl text-sm hover:bg-emerald-600 transition-colors"
+          >
+            <BarChart3 size={18} />
+            <span className="hidden sm:inline">השוואת חנויות</span>
+          </button>
           <button onClick={() => setShowExclusions(!showExclusions)} className={'relative p-2 rounded-xl transition-colors ' + (showExclusions ? 'bg-red-100 text-red-600' : 'hover:bg-gray-100 text-gray-600')}>
             <Filter size={20} />
             {totalExclusions > 0 && <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">{totalExclusions}</span>}
@@ -3246,10 +4997,19 @@ export default function App() {
     
     <div className="flex">
       <aside className="hidden lg:block w-56 bg-white border-l fixed top-[60px] bottom-0 overflow-y-auto print:hidden">
-        <nav className="p-4 space-y-1">{tabs.map(t => <button key={t.id} onClick={() => { setTab(t.id); setStore(null); setProduct(null); setDrillDownFilter(null); }} className={'w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ' + (tab === t.id ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600 hover:bg-gray-50')}><t.I size={20}/>{t.l}</button>)}</nav>
+        <nav className="p-4 space-y-1">{tabs.map(t => <button key={t.id} onClick={() => handleTabChange(t.id)} className={'w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ' + (tab === t.id ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600 hover:bg-gray-50')}><t.I size={20}/>{t.l}</button>)}</nav>
       </aside>
-      {menu && <div className="lg:hidden fixed inset-0 z-40 bg-black/50 print:hidden" onClick={() => setMenu(false)}><div className="w-64 bg-white h-full" onClick={e => e.stopPropagation()}><nav className="p-4 space-y-1 mt-16">{tabs.map(t => <button key={t.id} onClick={() => { setTab(t.id); setStore(null); setProduct(null); setDrillDownFilter(null); setMenu(false); }} className={'w-full flex items-center gap-3 px-4 py-3 rounded-xl ' + (tab === t.id ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600 hover:bg-gray-50')}><t.I size={20}/>{t.l}</button>)}</nav></div></div>}
+      {menu && <div className="lg:hidden fixed inset-0 z-40 bg-black/50 print:hidden" onClick={() => setMenu(false)}><div className="w-64 bg-white h-full" onClick={e => e.stopPropagation()}><nav className="p-4 space-y-1 mt-16">{tabs.map(t => <button key={t.id} onClick={() => { handleTabChange(t.id); setMenu(false); }} className={'w-full flex items-center gap-3 px-4 py-3 rounded-xl ' + (tab === t.id ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600 hover:bg-gray-50')}><t.I size={20}/>{t.l}</button>)}</nav></div></div>}
       <main className="flex-1 p-4 lg:p-6 lg:mr-56 w-full">{content()}</main>
     </div>
+    
+    {/* Global Store Comparison Modal */}
+    {showGlobalComparison && (
+      <GlobalStoreComparisonModal 
+        stores={ACTIVE_STORES}
+        onClose={() => setShowGlobalComparison(false)}
+        onSelectStore={(s) => { setShowGlobalComparison(false); handleStoreSelect(s); }}
+      />
+    )}
   </div>);
 }

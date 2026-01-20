@@ -37,6 +37,49 @@ body {
   direction: rtl;
 }
 
+/* Compact mode for small desktop screens (under 1400px width) */
+@media (max-width: 1400px) {
+  .main-table th,
+  .main-table td {
+    padding-left: 0.25rem !important;
+    padding-right: 0.25rem !important;
+    font-size: 0.75rem !important;
+  }
+  
+  .main-table .text-sm {
+    font-size: 0.7rem !important;
+  }
+  
+  .main-table .text-xs {
+    font-size: 0.65rem !important;
+  }
+  
+  .main-table .px-3 {
+    padding-left: 0.25rem !important;
+    padding-right: 0.25rem !important;
+  }
+}
+
+/* Very compact mode for very small screens (under 1200px) */
+@media (max-width: 1200px) {
+  .main-table th,
+  .main-table td {
+    padding: 0.2rem 0.15rem !important;
+    font-size: 0.65rem !important;
+  }
+  
+  .main-table .text-sm,
+  .main-table .text-xs {
+    font-size: 0.6rem !important;
+  }
+  
+  /* Hide less important columns on small screens */
+  .main-table th:nth-child(n+8),
+  .main-table td:nth-child(n+8) {
+    display: none;
+  }
+}
+
 /* Print styles */
 @media print {
   body {
