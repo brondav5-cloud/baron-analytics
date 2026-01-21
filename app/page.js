@@ -520,6 +520,33 @@ const calcProductDataForPeriod = (product, periodId) => {
   };
 };
 
+// v1.10.12 - Calculate data for store (in product detail) based on selected period  
+// This function estimates gross/returns from net and returns percentage
+// because stores in PRODUCT_STORES don't have detailed monthly_gross/monthly_returns data
+const calcProductStoreDataForPeriod = (store, periodId) => {
+  const period = PERIOD_OPTIONS.find(p => p.id === periodId) || PERIOD_OPTIONS[0];
+  const months = period.months;
+  
+  // Net quantity (sold items)
+  const net = months.reduce((sum, m) => sum + ((store.monthly_qty || {})[m] || 0), 0);
+  
+  // Use period-appropriate returns percentage
+  const isH2 = periodId.includes('h2') || periodId.includes('last') || periodId.includes('q4') || periodId === 'year_2025';
+  const returnsPct = isH2 ? (store.returns_pct_last6 || 0) : (store.returns_pct_prev6 || 0);
+  
+  // Estimate gross from net and returns percentage: net = gross * (1 - returns%)
+  const gross = returnsPct < 100 ? Math.round(net / (1 - returnsPct / 100)) : net;
+  const returns = gross - net;
+  
+  return {
+    ...store,
+    period_net: net,
+    period_gross: gross,
+    period_returns: returns,
+    period_returns_pct: returnsPct
+  };
+};
+
 // Month names for charts
 const MONTH_NAMES_SHORT = {
   '01': 'ינו', '02': 'פבר', '03': 'מרץ', '04': 'אפר', '05': 'מאי', '06': 'יונ',
@@ -735,14 +762,10 @@ const MonthlySalesChart = ({ data, store, product, title = "מכירות חוד�
     // אם יש store - לקחת נתונים מהחנות
     else if (store) {
       result = months.map(month => {
-        let gross = store.monthly_gross?.[month] || 0;
-        let net = store.monthly_net?.[month] || store.monthly_qty?.[month] || 0;
-        let returns = store.monthly_returns?.[month] || 0;
-        // טיפול בערכים שליליים - מציג 0
-        gross = Math.max(0, gross);
-        net = Math.max(0, net);
-        returns = Math.max(0, returns);
-        const sales = store.monthly_sales?.[month] || (net * 7.5);
+        const gross = store.monthly_gross?.[month] || 0;
+        const net = store.monthly_net?.[month] || store.monthly_qty?.[month] || 0;
+        const returns = store.monthly_returns?.[month] || 0;
+        const sales = store.monthly_sales?.[month] || (Math.abs(net) * 7.5);
         const deliveries = store.monthly_deliveries?.[month] || 0;
         const returnsPct = gross > 0 ? (returns / gross * 100) : 0;
         return {
@@ -882,8 +905,8 @@ const MonthlySalesChart = ({ data, store, product, title = "מכירות חוד�
               <tr className="border-t hover:bg-blue-50/50">
                 <td className="px-3 py-2.5 font-semibold text-blue-700 sticky right-0 bg-white border-l">ברוטו</td>
                 {chartData.map(d => (
-                  <td key={d.monthKey} className={`px-3 py-2.5 text-center font-medium ${d.isHolidayMonth ? 'opacity-40 bg-gray-100' : ''}`}>
-                    {d.gross > 0 ? fmt(d.gross) : '-'}
+                  <td key={d.monthKey} className={`px-3 py-2.5 text-center font-medium ${d.isHolidayMonth ? 'opacity-40 bg-gray-100' : ''} ${d.gross < 0 ? 'text-red-600' : ''}`}>
+                    {d.gross !== 0 ? fmt(d.gross) : '-'}
                   </td>
                 ))}
                 <td className="px-4 py-2.5 text-center font-bold text-blue-700 bg-blue-50 border-r">{fmt(totals.gross)}</td>
@@ -894,11 +917,11 @@ const MonthlySalesChart = ({ data, store, product, title = "מכירות חוד�
             <tr className="border-t bg-emerald-50/30 hover:bg-emerald-50">
               <td className="px-3 py-2.5 font-semibold text-emerald-700 sticky right-0 bg-emerald-50/30 border-l">נטו (פריטים)</td>
               {chartData.map(d => (
-                <td key={d.monthKey} className={`px-3 py-2.5 text-center font-medium text-emerald-600 ${d.isHolidayMonth ? 'opacity-40 bg-gray-100' : ''}`}>
-                  {d.net > 0 ? fmt(d.net) : '-'}
+                <td key={d.monthKey} className={`px-3 py-2.5 text-center font-medium ${d.net < 0 ? 'text-red-600' : 'text-emerald-600'} ${d.isHolidayMonth ? 'opacity-40 bg-gray-100' : ''}`}>
+                  {d.net !== 0 ? fmt(d.net) : '-'}
                 </td>
               ))}
-              <td className="px-4 py-2.5 text-center font-bold text-emerald-700 bg-blue-50 border-r">{fmt(totals.net)}</td>
+              <td className={`px-4 py-2.5 text-center font-bold bg-blue-50 border-r ${totals.net < 0 ? 'text-red-600' : 'text-emerald-700'}`}>{fmt(totals.net)}</td>
             </tr>
             
             {/* חזרות */}
@@ -907,7 +930,7 @@ const MonthlySalesChart = ({ data, store, product, title = "מכירות חוד�
                 <td className="px-3 py-2.5 font-semibold text-red-600 sticky right-0 bg-white border-l">חזרות</td>
                 {chartData.map(d => (
                   <td key={d.monthKey} className={`px-3 py-2.5 text-center font-medium text-red-500 ${d.isHolidayMonth ? 'opacity-40 bg-gray-100' : ''}`}>
-                    {d.returns > 0 ? fmt(d.returns) : '-'}
+                    {d.returns !== 0 ? fmt(d.returns) : '-'}
                   </td>
                 ))}
                 <td className="px-4 py-2.5 text-center font-bold text-red-600 bg-blue-50 border-r">{fmt(totals.returns)}</td>
@@ -920,7 +943,7 @@ const MonthlySalesChart = ({ data, store, product, title = "מכירות חוד�
                 <td className="px-3 py-2.5 font-semibold text-red-600 sticky right-0 bg-red-50/30 border-l">חזרות %</td>
                 {chartData.map(d => (
                   <td key={d.monthKey} className={`px-3 py-2.5 text-center font-medium ${d.returnsPct > 20 ? 'text-red-600' : d.returnsPct > 10 ? 'text-orange-500' : 'text-gray-500'} ${d.isHolidayMonth ? 'opacity-40 bg-gray-100' : ''}`}>
-                    {d.gross > 0 ? d.returnsPct.toFixed(0) + '%' : '-'}
+                    {d.gross !== 0 ? d.returnsPct.toFixed(0) + '%' : '-'}
                   </td>
                 ))}
                 <td className="px-4 py-2.5 text-center font-bold text-red-600 bg-blue-50 border-r">{totals.returnsPct.toFixed(0)}%</td>
@@ -1447,7 +1470,7 @@ const Overview = ({ stores, products, onNav, onDrillDown }) => {
     </div>
     <div className="bg-white rounded-2xl shadow-lg p-6 border">
       <h3 className="text-lg font-bold mb-4">השוואה שנתית: 2024 ↔ 2025</h3>
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <div className="text-center p-4 bg-blue-50 rounded-xl"><p className="text-sm text-gray-600">כמות 2024</p><p className="text-xl font-bold text-blue-600">{fmt(st.q24)}</p></div>
         <div className="text-center p-4 bg-emerald-50 rounded-xl"><p className="text-sm text-gray-600">כמות 2025</p><p className="text-xl font-bold text-emerald-600">{fmt(st.q25)}</p></div>
         <div className={'text-center p-4 rounded-xl ' + (st.yoy_qty >= 0 ? 'bg-emerald-50' : 'bg-red-50')}><p className="text-sm text-gray-600">שינוי</p><p className={'text-xl font-bold ' + (st.yoy_qty >= 0 ? 'text-emerald-600' : 'text-red-600')}>{fmtPct(st.yoy_qty)}</p></div>
@@ -1458,7 +1481,7 @@ const Overview = ({ stores, products, onNav, onDrillDown }) => {
     </div>
     <div className="bg-white rounded-2xl shadow-lg p-6 border">
       <h3 className="text-lg font-bold mb-4">השוואה חצי שנתית: H1 ↔ H2 2025</h3>
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <div className="text-center p-4 bg-blue-50 rounded-xl"><p className="text-sm text-gray-600">כמות H1</p><p className="text-xl font-bold text-blue-600">{fmt(st.qp6)}</p></div>
         <div className="text-center p-4 bg-emerald-50 rounded-xl"><p className="text-sm text-gray-600">כמות H2</p><p className="text-xl font-bold text-emerald-600">{fmt(st.ql6)}</p></div>
         <div className={'text-center p-4 rounded-xl ' + (st.hoh_qty >= 0 ? 'bg-emerald-50' : 'bg-red-50')}><p className="text-sm text-gray-600">שינוי</p><p className={'text-xl font-bold ' + (st.hoh_qty >= 0 ? 'text-emerald-600' : 'text-red-600')}>{fmtPct(st.hoh_qty)}</p></div>
@@ -3895,7 +3918,7 @@ const StoreDetail = ({ store, onBack, allStores, excludedProducts = [], sourceWi
       )}
     </div>
     <CityIndicator store={store} allStores={allStores} onSelectStore={onSelectStore} />
-    <div className="grid grid-cols-3 lg:grid-cols-6 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
       <MBox label="שנתי (24→25)" value={store.metric_12v12} sub={fmt(store.qty_2024) + '→' + fmt(store.qty_2025)} />
       <MBox label="6 חודשים (H1→H2)" value={store.metric_6v6} sub={fmt(store.qty_prev6) + '→' + fmt(store.qty_last6)} />
       <MBox label="3 חודשים (24→25)" value={store.metric_3v3} sub={fmt(store.qty_prev3) + '→' + fmt(store.qty_last3)} />
@@ -4560,8 +4583,8 @@ const ProductDetail = ({ product, onBack, rulesConfig, onSelectStore }) => {
   const [compDataPeriod, setCompDataPeriod] = useState('h2_2025');
   const printRef = useRef(null);
   
-  // v1.10.9 - Calculate data for stores based on selected period
-  const storesWithData = useMemo(() => stores.map(s => calcStoreDataForPeriod(s, dataPeriod)), [stores, dataPeriod]);
+  // v1.10.12 - Calculate data for stores based on selected period (using product store function)
+  const storesWithData = useMemo(() => stores.map(s => calcProductStoreDataForPeriod(s, dataPeriod)), [stores, dataPeriod]);
   
   // Calculate summary values for metrics table
   const summaryData = useMemo(() => {
@@ -4577,17 +4600,15 @@ const ProductDetail = ({ product, onBack, rulesConfig, onSelectStore }) => {
     return { count, avg12v12, avg3v3, avg6v6, avg2v2, avgPeak, avgReturns, totalQty };
   }, [stores]);
   
-  // v1.10.9 - Data table summary
+  // v1.10.12 - Data table summary (no deliveries for product stores)
   const dataSummary = useMemo(() => {
     const count = storesWithData.length;
     if (count === 0) return null;
     const totalGross = storesWithData.reduce((s, x) => s + x.period_gross, 0);
     const totalNet = storesWithData.reduce((s, x) => s + x.period_net, 0);
     const totalReturns = storesWithData.reduce((s, x) => s + x.period_returns, 0);
-    const totalDeliveries = storesWithData.reduce((s, x) => s + x.period_deliveries, 0);
     const avgReturnsPct = totalGross > 0 ? (totalReturns / totalGross * 100) : 0;
-    const avgPerDelivery = totalDeliveries > 0 ? (totalNet / totalDeliveries) : 0;
-    return { count, totalGross, totalNet, totalReturns, totalDeliveries, avgReturnsPct, avgPerDelivery };
+    return { count, totalGross, totalNet, totalReturns, avgReturnsPct };
   }, [storesWithData]);
   
   // Toggle store selection
@@ -4630,7 +4651,7 @@ const ProductDetail = ({ product, onBack, rulesConfig, onSelectStore }) => {
     { k: 'qty_total', l: 'כמות', r: v => <span className="font-bold">{fmt(v)}</span> },
   ];
   
-  // Data columns (dynamic period)
+  // Data columns (dynamic period) - v1.10.12 - no deliveries for product stores
   const storeDataCols = [
     { k: 'select', l: '☑', r: (v, r) => <div onClick={e => { e.stopPropagation(); toggleSelect(r.id); }} className="w-10 h-10 flex items-center justify-center cursor-pointer hover:bg-purple-100 rounded-lg -m-2"><input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => {}} className="w-5 h-5 cursor-pointer pointer-events-none" /></div> },
     { k: 'name', l: 'חנות', r: (v, r) => <div className="min-w-[100px]"><p className="font-medium text-sm leading-tight">{v}</p><p className="text-xs text-gray-500">{r.city}</p></div> },
@@ -4638,8 +4659,6 @@ const ProductDetail = ({ product, onBack, rulesConfig, onSelectStore }) => {
     { k: 'period_net', l: 'נטו', r: v => <span className="font-medium text-green-700">{fmt(v)}</span> },
     { k: 'period_returns', l: 'חזרות', r: v => <span className="font-medium text-red-600">{fmt(v)}</span> },
     { k: 'period_returns_pct', l: 'חזרות\n%', r: v => <span className={v > 20 ? 'text-red-600 font-bold' : v > 10 ? 'text-blue-600' : 'text-gray-600'}>{(v || 0).toFixed(1)}%</span> },
-    { k: 'period_deliveries', l: 'אספקות', r: v => <span className="font-medium text-violet-700">{fmt(v)}</span> },
-    { k: 'period_avg_per_delivery', l: 'ממוצע\nלאספקה', r: v => <span className="font-medium text-blue-700">{fmt(Math.round(v || 0))}</span> },
   ];
   
   // Build summary rows
@@ -4664,8 +4683,6 @@ const ProductDetail = ({ product, onBack, rulesConfig, onSelectStore }) => {
     { value: <span className="font-bold text-green-700">{fmt(dataSummary.totalNet)}</span>, className: 'text-center' },
     { value: <span className="font-bold text-red-600">{fmt(dataSummary.totalReturns)}</span>, className: 'text-center' },
     { value: <span className={dataSummary.avgReturnsPct > 15 ? 'text-red-600 font-bold' : 'text-gray-700'}>{dataSummary.avgReturnsPct.toFixed(1)}%</span>, className: 'text-center' },
-    { value: <span className="font-bold text-violet-700">{fmt(dataSummary.totalDeliveries)}</span>, className: 'text-center' },
-    { value: <span className="font-bold text-blue-700">{fmt(Math.round(dataSummary.avgPerDelivery))}</span>, className: 'text-center' },
   ] : null;
   
   // Export functions
@@ -4683,7 +4700,7 @@ const ProductDetail = ({ product, onBack, rulesConfig, onSelectStore }) => {
     const cols = [
       { k: 'name', l: 'חנות' }, { k: 'city', l: 'עיר' },
       { k: 'period_gross', l: 'ברוטו' }, { k: 'period_net', l: 'נטו' }, { k: 'period_returns', l: 'חזרות' },
-      { k: 'period_returns_pct', l: 'חזרות %' }, { k: 'period_deliveries', l: 'אספקות' }, { k: 'period_avg_per_delivery', l: 'ממוצע לאספקה' },
+      { k: 'period_returns_pct', l: 'חזרות %' },
     ];
     exportCSV(storesWithData, cols, `חנויות_${product.name}_נתונים_${periodLabel}`);
   };
@@ -4749,11 +4766,11 @@ const ProductDetail = ({ product, onBack, rulesConfig, onSelectStore }) => {
   const exportCompDataCSV = () => {
     if (selectedStores.length === 0) return;
     const periodLabel = getPeriodLabel(compDataPeriod).replace(/[()]/g, '');
-    const selectedWithData = selectedStores.map(s => calcStoreDataForPeriod(s, compDataPeriod));
+    const selectedWithData = selectedStores.map(s => calcProductStoreDataForPeriod(s, compDataPeriod));
     const cols = [
       { k: 'name', l: 'חנות' }, { k: 'city', l: 'עיר' },
       { k: 'period_gross', l: 'ברוטו' }, { k: 'period_net', l: 'נטו' }, { k: 'period_returns', l: 'חזרות' },
-      { k: 'period_returns_pct', l: 'חזרות %' }, { k: 'period_deliveries', l: 'אספקות' }, { k: 'period_avg_per_delivery', l: 'ממוצע לאספקה' },
+      { k: 'period_returns_pct', l: 'חזרות %' },
     ];
     exportCSV(selectedWithData, cols, `השוואת_חנויות_${product.name}_${periodLabel}`);
   };
@@ -4769,7 +4786,7 @@ const ProductDetail = ({ product, onBack, rulesConfig, onSelectStore }) => {
         <Badge status={product.status} />
       </div>
     </div>
-    <div className="grid grid-cols-3 lg:grid-cols-6 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
       <MBox label="שנתי (24→25)" value={product.metric_12v12} sub={fmt(product.qty_2024) + '→' + fmt(product.qty_2025)} />
       <MBox label="6 חודשים" value={product.metric_6v6} sub={fmt(product.qty_prev6) + '→' + fmt(product.qty_last6)} />
       <MBox label="3 חודשים" value={product.metric_3v3} sub={fmt(product.qty_prev3) + '→' + fmt(product.qty_last3)} />
@@ -5003,7 +5020,7 @@ const ProductDetail = ({ product, onBack, rulesConfig, onSelectStore }) => {
                 </div>
               </div>
               
-              {/* Table 2: Data */}
+              {/* Table 2: Data - v1.10.12 - no deliveries for product stores */}
               <div>
                 <div className="flex justify-between items-center mb-3 print:hidden">
                   <h3 className="text-lg font-bold flex items-center gap-2 text-purple-700">
@@ -5029,18 +5046,14 @@ const ProductDetail = ({ product, onBack, rulesConfig, onSelectStore }) => {
                         <th className="p-2 md:p-3 text-center border-b font-bold bg-green-50">נטו</th>
                         <th className="p-2 md:p-3 text-center border-b font-bold bg-red-50">חזרות</th>
                         <th className="p-2 md:p-3 text-center border-b font-bold bg-red-50">חזרות %</th>
-                        <th className="p-2 md:p-3 text-center border-b font-bold bg-violet-50">אספקות</th>
-                        <th className="p-2 md:p-3 text-center border-b font-bold bg-blue-50">ממוצע<br/>לאספקה</th>
                       </tr>
                       {/* Summary Row */}
                       {(() => {
-                        const compStores = selectedStores.map(s => calcStoreDataForPeriod(s, compDataPeriod));
+                        const compStores = selectedStores.map(s => calcProductStoreDataForPeriod(s, compDataPeriod));
                         const totalGross = compStores.reduce((s, x) => s + x.period_gross, 0);
                         const totalNet = compStores.reduce((s, x) => s + x.period_net, 0);
                         const totalReturns = compStores.reduce((s, x) => s + x.period_returns, 0);
-                        const totalDeliveries = compStores.reduce((s, x) => s + x.period_deliveries, 0);
                         const avgReturnsPct = totalGross > 0 ? (totalReturns / totalGross * 100) : 0;
-                        const avgPerDelivery = totalDeliveries > 0 ? (totalNet / totalDeliveries) : 0;
                         return (
                           <tr className="bg-purple-100 font-bold text-purple-800 border-b-2 border-purple-300 summary-row-data">
                             <td className="p-2 text-center">Σ</td>
@@ -5049,14 +5062,12 @@ const ProductDetail = ({ product, onBack, rulesConfig, onSelectStore }) => {
                             <td className="p-2 text-center text-green-700">{fmt(totalNet)}</td>
                             <td className="p-2 text-center text-red-600">{fmt(totalReturns)}</td>
                             <td className="p-2 text-center text-red-600">{avgReturnsPct.toFixed(1)}%</td>
-                            <td className="p-2 text-center text-violet-700">{fmt(totalDeliveries)}</td>
-                            <td className="p-2 text-center text-blue-700">{fmt(Math.round(avgPerDelivery))}</td>
                           </tr>
                         );
                       })()}
                     </thead>
                     <tbody>
-                      {[...selectedStores].map(s => calcStoreDataForPeriod(s, compDataPeriod)).sort((a, b) => (b.period_net || 0) - (a.period_net || 0)).map((s, i) => {
+                      {[...selectedStores].map(s => calcProductStoreDataForPeriod(s, compDataPeriod)).sort((a, b) => (b.period_net || 0) - (a.period_net || 0)).map((s, i) => {
                         const returnsPctColor = s.period_returns_pct > 20 ? 'text-red-600 font-bold' : s.period_returns_pct > 10 ? 'text-blue-600' : 'text-gray-600';
                         return (
                           <tr key={s.id} className="hover:bg-purple-50 border-b transition-colors">
@@ -5069,8 +5080,6 @@ const ProductDetail = ({ product, onBack, rulesConfig, onSelectStore }) => {
                             <td className="p-2 text-center bg-green-50/30 font-medium text-green-700">{fmt(s.period_net)}</td>
                             <td className="p-2 text-center bg-red-50/30 font-medium text-red-600">{fmt(s.period_returns)}</td>
                             <td className={`p-2 text-center bg-red-50/30 ${returnsPctColor}`}>{(s.period_returns_pct || 0).toFixed(1)}%</td>
-                            <td className="p-2 text-center bg-violet-50/30 font-medium text-violet-700">{fmt(s.period_deliveries)}</td>
-                            <td className="p-2 text-center bg-blue-50/30 font-medium text-blue-700">{fmt(Math.round(s.period_avg_per_delivery || 0))}</td>
                           </tr>
                         );
                       })}
@@ -6276,7 +6285,7 @@ const SettingsPage = ({ onLogout }) => {
 // Baron Logo Component - using actual image
 const BaronLogo = () => (
   <div className="flex items-center gap-3">
-    <img src="/baron-logo.jpg" alt="ברון" className="h-10 w-auto" />
+    <img src="/baron-logo.png" alt="ברון" className="h-10 w-auto" />
   </div>
 );
 
