@@ -499,6 +499,27 @@ const getPeriodLabel = (periodId) => {
   return period ? period.label : 'H2 2025';
 };
 
+// v1.10.9 - Calculate data for a product based on selected period (similar to stores)
+const calcProductDataForPeriod = (product, periodId) => {
+  const period = PERIOD_OPTIONS.find(p => p.id === periodId) || PERIOD_OPTIONS[0];
+  const months = period.months;
+  
+  const gross = months.reduce((sum, m) => sum + ((product.monthly_gross || {})[m] || 0), 0);
+  const net = months.reduce((sum, m) => sum + ((product.monthly_net || product.monthly_qty || {})[m] || 0), 0);
+  const returns = months.reduce((sum, m) => sum + ((product.monthly_returns || {})[m] || 0), 0);
+  const sales = months.reduce((sum, m) => sum + ((product.monthly_sales || {})[m] || 0), 0);
+  const returnsPct = gross > 0 ? (returns / gross * 100) : 0;
+  
+  return {
+    ...product,
+    period_gross: gross,
+    period_net: net,
+    period_returns: returns,
+    period_sales: sales,
+    period_returns_pct: returnsPct
+  };
+};
+
 // Month names for charts
 const MONTH_NAMES_SHORT = {
   '01': 'ינו', '02': 'פבר', '03': 'מרץ', '04': 'אפר', '05': 'מאי', '06': 'יונ',
@@ -2782,6 +2803,783 @@ const GlobalStoreComparisonModal = ({ stores, onClose, onSelectStore }) => {
   );
 };
 
+// v1.10.9 - Global Product Comparison Modal (similar to GlobalStoreComparisonModal)
+const GlobalProductComparisonModal = ({ products, onClose, onSelectProduct }) => {
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [searchTerm, setSearchTerm] = useState('');
+  const [dataPeriod, setDataPeriod] = useState('h2_2025');
+  const printRef = useRef(null);
+  
+  if (!products || products.length === 0) return null;
+  
+  // Calculate data for each product based on selected period
+  const productsWithData = useMemo(() => products.map(p => calcProductDataForPeriod(p, dataPeriod)), [products, dataPeriod]);
+  
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  
+  const removeSelected = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  };
+  
+  const clearSelection = () => setSelectedIds(new Set());
+  
+  // Filter products by search term
+  const searchResults = searchTerm.length >= 2 
+    ? productsWithData.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.category?.toLowerCase().includes(searchTerm.toLowerCase()))
+    : [];
+  
+  // Selected products for tables
+  const selectedProducts = productsWithData.filter(p => selectedIds.has(p.id));
+  
+  // PDF export
+  const handlePrintPDF = () => {
+    const printContent = printRef.current;
+    if (!printContent) return;
+    
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <html dir="rtl">
+      <head>
+        <title>השוואת מוצרים - Baron</title>
+        <style>
+          * { box-sizing: border-box; font-family: Arial, sans-serif; }
+          body { padding: 20px; direction: rtl; }
+          h2 { color: #7c3aed; margin: 20px 0 10px; font-size: 18px; }
+          h3 { color: #0891b2; margin: 20px 0 10px; font-size: 16px; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11px; page-break-inside: auto; }
+          th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: center; }
+          th { background: #f3f4f6; font-weight: bold; }
+          tr { page-break-inside: avoid; }
+          .text-right { text-align: right; }
+          .text-emerald { color: #059669; }
+          .text-red { color: #dc2626; }
+          .text-blue { color: #2563eb; }
+          .text-green { color: #16a34a; }
+          .text-purple { color: #7c3aed; }
+          .text-amber { color: #d97706; }
+          .summary-row { background: #ede9fe; font-weight: bold; }
+          .summary-row-data { background: #cffafe; font-weight: bold; }
+          .small { font-size: 9px; color: #666; }
+          @media print { 
+            @page { margin: 1cm; size: landscape; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
+        </style>
+      </head>
+      <body>
+        <h1 style="text-align:center;color:#1f2937;">השוואת מוצרים - Baron</h1>
+        <p style="text-align:center;color:#666;margin-bottom:20px;">${selectedProducts.length} מוצרים | ${new Date().toLocaleDateString('he-IL')}</p>
+        ${printContent.innerHTML}
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => { printWindow.print(); printWindow.close(); }, 250);
+  };
+  
+  // Export functions
+  const exportMetricsToCSV = () => {
+    if (selectedProducts.length === 0) return;
+    const cols = [
+      { k: 'name', l: 'מוצר' },
+      { k: 'category', l: 'קטגוריה' },
+      { k: 'status_long', l: 'סטטוס ארוך' },
+      { k: 'qty_2024', l: 'כמות 2024' },
+      { k: 'qty_2025', l: 'כמות 2025' },
+      { k: 'metric_12v12', l: 'שנתי %' },
+      { k: 'qty_prev3', l: '3 חודשים קודם' },
+      { k: 'qty_last3', l: '3 חודשים אחרון' },
+      { k: 'metric_3v3', l: '3 חודשים %' },
+      { k: 'qty_prev6', l: '6 חודשים קודם' },
+      { k: 'qty_last6', l: '6 חודשים אחרון' },
+      { k: 'metric_6v6', l: '6 חודשים %' },
+      { k: 'qty_prev2', l: '2 חודשים קודם' },
+      { k: 'qty_last2', l: '2 חודשים אחרון' },
+      { k: 'metric_2v2', l: '2 חודשים %' },
+      { k: 'status_short', l: 'סטטוס קצר' },
+    ];
+    exportCSV(selectedProducts, cols, 'השוואת_מוצרים_מדדים');
+  };
+  
+  const exportDataToCSV = () => {
+    if (selectedProducts.length === 0) return;
+    const periodLabel = getPeriodLabel(dataPeriod).replace(/[()]/g, '');
+    const cols = [
+      { k: 'name', l: 'מוצר' },
+      { k: 'category', l: 'קטגוריה' },
+      { k: 'period_gross', l: 'ברוטו' },
+      { k: 'period_net', l: 'נטו' },
+      { k: 'period_returns', l: 'חזרות' },
+      { k: 'period_returns_pct', l: 'חזרות %' },
+      { k: 'period_sales', l: 'מחזור ₪' },
+    ];
+    exportCSV(selectedProducts, cols, `השוואת_מוצרים_${periodLabel}`);
+  };
+  
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-2 md:p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="bg-gradient-to-r from-violet-600 to-purple-600 text-white p-4 flex justify-between items-center print:hidden">
+          <div className="flex items-center gap-3">
+            <Package size={24} />
+            <h2 className="text-lg md:text-xl font-bold">השוואת מוצרים</h2>
+            {selectedIds.size > 0 && <span className="bg-white/20 px-3 py-1 rounded-full text-sm">{selectedIds.size} נבחרו</span>}
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full">
+            <X size={24} />
+          </button>
+        </div>
+        
+        {/* Content */}
+        <div className="p-4 md:p-6 overflow-y-auto max-h-[calc(95vh-80px)] space-y-6">
+          
+          {/* Search & Selection Panel */}
+          <div className="bg-gray-50 rounded-xl p-4 border print:hidden">
+            <div className="flex flex-col md:flex-row gap-4">
+              {/* Search */}
+              <div className="flex-1">
+                <label className="text-sm font-medium text-gray-700 block mb-2">חיפוש מוצרים להוספה</label>
+                <div className="relative">
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    placeholder="הקלד לפחות 2 תווים..."
+                    className="w-full pr-10 pl-4 py-2 border rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+                  />
+                </div>
+                {/* Search Results */}
+                {searchResults.length > 0 && (
+                  <div className="mt-2 max-h-40 overflow-y-auto border rounded-lg bg-white">
+                    {searchResults.slice(0, 20).map(p => (
+                      <button
+                        key={p.id}
+                        onClick={() => { toggleSelect(p.id); setSearchTerm(''); }}
+                        className={`w-full text-right px-3 py-2 hover:bg-violet-50 flex justify-between items-center border-b last:border-b-0 ${selectedIds.has(p.id) ? 'bg-violet-100' : ''}`}
+                      >
+                        <span className="font-medium">{p.name}</span>
+                        <span className="text-sm text-gray-500">{p.category}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              
+              {/* Selected Products */}
+              <div className="flex-1">
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-sm font-medium text-gray-700">מוצרים שנבחרו ({selectedIds.size})</label>
+                  {selectedIds.size > 0 && (
+                    <button onClick={clearSelection} className="text-xs text-red-600 hover:text-red-800">נקה הכל</button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
+                  {selectedProducts.map(p => (
+                    <span key={p.id} className="inline-flex items-center gap-1 px-2 py-1 bg-violet-100 text-violet-800 rounded-full text-sm">
+                      {p.name}
+                      <button onClick={() => removeSelected(p.id)} className="hover:text-red-600">
+                        <X size={14} />
+                      </button>
+                    </span>
+                  ))}
+                  {selectedIds.size === 0 && <p className="text-gray-400 text-sm">חפש והוסף מוצרים להשוואה</p>}
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Tables - only show if products selected */}
+          {selectedProducts.length > 0 && (
+            <div ref={printRef}>
+              {/* Table 1: Metrics Comparison */}
+              <div className="mb-6">
+                <div className="flex justify-between items-center mb-3 print:hidden">
+                  <h3 className="text-lg font-bold flex items-center gap-2 text-violet-700">
+                    <TrendingUp size={20} />
+                    השוואת מדדים
+                  </h3>
+                  <div className="flex gap-2">
+                    <button onClick={handlePrintPDF} className="flex items-center gap-1 px-3 py-1.5 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600">
+                      <FileText size={16} />PDF
+                    </button>
+                    <button onClick={exportMetricsToCSV} className="flex items-center gap-1 px-3 py-1.5 bg-violet-500 text-white rounded-lg text-sm hover:bg-violet-600">
+                      <Download size={16} />Excel
+                    </button>
+                  </div>
+                </div>
+                <h2 className="hidden print:block">השוואת מדדים</h2>
+                <div className="overflow-x-auto border rounded-xl print:border-0">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-100 text-gray-700">
+                        <th className="p-2 md:p-3 text-right border-b font-bold">#</th>
+                        <th className="p-2 md:p-3 text-right border-b font-bold min-w-[120px]">מוצר</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">סטטוס<br/>ארוך</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">שנתי<br/>24→25</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">3 חודשים<br/>24→25</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">6 חודשים<br/>H1→H2</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">2 חודשים<br/>ספט→נוב</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">סטטוס<br/>קצר</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">כמות<br/>2025</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">מחזור ₪</th>
+                      </tr>
+                      {/* Summary Row */}
+                      <tr className="bg-violet-50 font-bold text-violet-800 border-b-2 border-violet-300 summary-row">
+                        <td className="p-2 text-center">Σ</td>
+                        <td className="p-2 text-right">סה״כ {selectedProducts.length} מוצרים</td>
+                        <td className="p-2 text-center">-</td>
+                        <td className="p-2 text-center">
+                          <span className={(selectedProducts.reduce((s, x) => s + (x.metric_12v12 || 0), 0) / selectedProducts.length) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}>
+                            {fmtPct(selectedProducts.reduce((s, x) => s + (x.metric_12v12 || 0), 0) / selectedProducts.length)}
+                          </span>
+                        </td>
+                        <td className="p-2 text-center">
+                          <span className={(selectedProducts.reduce((s, x) => s + (x.metric_3v3 || 0), 0) / selectedProducts.length) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}>
+                            {fmtPct(selectedProducts.reduce((s, x) => s + (x.metric_3v3 || 0), 0) / selectedProducts.length)}
+                          </span>
+                        </td>
+                        <td className="p-2 text-center">
+                          <span className={(selectedProducts.reduce((s, x) => s + (x.metric_6v6 || 0), 0) / selectedProducts.length) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}>
+                            {fmtPct(selectedProducts.reduce((s, x) => s + (x.metric_6v6 || 0) / selectedProducts.length, 0))}
+                          </span>
+                        </td>
+                        <td className="p-2 text-center">
+                          <span className={(selectedProducts.reduce((s, x) => s + (x.metric_2v2 || 0), 0) / selectedProducts.length) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}>
+                            {fmtPct(selectedProducts.reduce((s, x) => s + (x.metric_2v2 || 0), 0) / selectedProducts.length)}
+                          </span>
+                        </td>
+                        <td className="p-2 text-center">-</td>
+                        <td className="p-2 text-center">{fmt(selectedProducts.reduce((s, x) => s + (x.qty_2025 || 0), 0))}</td>
+                        <td className="p-2 text-center">₪{fmt(selectedProducts.reduce((s, x) => s + (x.sales_2025 || 0), 0))}</td>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...selectedProducts].sort((a, b) => (b.metric_12v12 || 0) - (a.metric_12v12 || 0)).map((p, i) => {
+                        const statusLongCfg = STATUS_CFG[p.status_long] || STATUS_CFG['יציב'];
+                        const statusShortCfg = STATUS_CFG[p.status_short] || STATUS_CFG['יציב'];
+                        return (
+                          <tr 
+                            key={p.id} 
+                            onClick={() => onSelectProduct && onSelectProduct(p)}
+                            className="hover:bg-violet-50 border-b cursor-pointer transition-colors"
+                          >
+                            <td className="p-2 text-center font-bold">{i + 1}</td>
+                            <td className="p-2 text-right">
+                              <div className="font-medium">{p.name}</div>
+                              <div className="text-xs text-gray-500 small">{p.category}</div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <span className={`${statusLongCfg.bg} ${statusLongCfg.text} px-1.5 py-0.5 rounded text-xs whitespace-nowrap`}>{p.status_long || 'יציב'}</span>
+                            </td>
+                            <td className="p-2 text-center">
+                              <div className={`font-medium ${(p.metric_12v12 || 0) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}`}>{fmtPct(p.metric_12v12)}</div>
+                              <div className="text-xs text-gray-400 small">{fmt(p.qty_2024)}→{fmt(p.qty_2025)}</div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <div className={`font-medium ${(p.metric_3v3 || 0) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}`}>{fmtPct(p.metric_3v3)}</div>
+                              <div className="text-xs text-gray-400 small">{fmt(p.qty_prev3)}→{fmt(p.qty_last3)}</div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <div className={`font-medium ${(p.metric_6v6 || 0) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}`}>{fmtPct(p.metric_6v6)}</div>
+                              <div className="text-xs text-gray-400 small">{fmt(p.qty_prev6)}→{fmt(p.qty_last6)}</div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <div className={`font-medium ${(p.metric_2v2 || 0) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}`}>{fmtPct(p.metric_2v2)}</div>
+                              <div className="text-xs text-gray-400 small">{fmt(p.qty_prev2)}→{fmt(p.qty_last2)}</div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <span className={`${statusShortCfg.bg} ${statusShortCfg.text} px-1.5 py-0.5 rounded text-xs whitespace-nowrap`}>{p.status_short || 'יציב'}</span>
+                            </td>
+                            <td className="p-2 text-center font-medium">{fmt(p.qty_2025)}</td>
+                            <td className="p-2 text-center">₪{fmt(p.sales_2025)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              
+              {/* Table 2: Data */}
+              <div>
+                <div className="flex justify-between items-center mb-3 print:hidden">
+                  <h3 className="text-lg font-bold flex items-center gap-2 text-cyan-700">
+                    <BarChart3 size={20} />
+                    נתונים חודשיים
+                    <PeriodSelector value={dataPeriod} onChange={setDataPeriod} />
+                  </h3>
+                  <div className="flex gap-2">
+                    <button onClick={exportDataToCSV} className="flex items-center gap-1 px-3 py-1.5 bg-cyan-500 text-white rounded-lg text-sm hover:bg-cyan-600">
+                      <Download size={16} />Excel
+                    </button>
+                  </div>
+                </div>
+                <h3 className="hidden print:block">נתונים חודשיים ({getPeriodLabel(dataPeriod)})</h3>
+                <div className="overflow-x-auto border rounded-xl print:border-0">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-cyan-50 text-gray-700">
+                        <th className="p-2 md:p-3 text-right border-b font-bold">#</th>
+                        <th className="p-2 md:p-3 text-right border-b font-bold min-w-[120px]">מוצר</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold bg-blue-50">ברוטו</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold bg-green-50">נטו</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold bg-red-50">חזרות</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold bg-red-50">חזרות %</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold bg-amber-50">מחזור ₪</th>
+                      </tr>
+                      {/* Summary Row */}
+                      <tr className="bg-cyan-100 font-bold text-cyan-800 border-b-2 border-cyan-300 summary-row-data">
+                        <td className="p-2 text-center">Σ</td>
+                        <td className="p-2 text-right">סה״כ {selectedProducts.length} מוצרים</td>
+                        <td className="p-2 text-center text-blue text-blue-700">{fmt(selectedProducts.reduce((s, x) => s + x.period_gross, 0))}</td>
+                        <td className="p-2 text-center text-green text-green-700">{fmt(selectedProducts.reduce((s, x) => s + x.period_net, 0))}</td>
+                        <td className="p-2 text-center text-red text-red-600">{fmt(selectedProducts.reduce((s, x) => s + x.period_returns, 0))}</td>
+                        <td className="p-2 text-center text-red text-red-600">
+                          {(selectedProducts.reduce((s, x) => s + x.period_gross, 0) > 0 
+                            ? (selectedProducts.reduce((s, x) => s + x.period_returns, 0) / selectedProducts.reduce((s, x) => s + x.period_gross, 0) * 100) 
+                            : 0).toFixed(1)}%
+                        </td>
+                        <td className="p-2 text-center text-amber text-amber-700">₪{fmt(selectedProducts.reduce((s, x) => s + x.period_sales, 0))}</td>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...selectedProducts].sort((a, b) => (b.period_net || 0) - (a.period_net || 0)).map((p, i) => {
+                        const returnsPctColor = p.period_returns_pct > 20 ? 'text-red-600 font-bold' : p.period_returns_pct > 10 ? 'text-blue-600' : 'text-gray-600';
+                        return (
+                          <tr 
+                            key={p.id} 
+                            onClick={() => onSelectProduct && onSelectProduct(p)}
+                            className="hover:bg-cyan-50 border-b cursor-pointer transition-colors"
+                          >
+                            <td className="p-2 text-center font-bold">{i + 1}</td>
+                            <td className="p-2 text-right">
+                              <div className="font-medium">{p.name}</div>
+                              <div className="text-xs text-gray-500 small">{p.category}</div>
+                            </td>
+                            <td className="p-2 text-center bg-blue-50/30 font-medium text-blue text-blue-700">{fmt(p.period_gross)}</td>
+                            <td className="p-2 text-center bg-green-50/30 font-medium text-green text-green-700">{fmt(p.period_net)}</td>
+                            <td className="p-2 text-center bg-red-50/30 font-medium text-red text-red-600">{fmt(p.period_returns)}</td>
+                            <td className={`p-2 text-center bg-red-50/30 ${returnsPctColor}`}>{p.period_returns_pct.toFixed(1)}%</td>
+                            <td className="p-2 text-center bg-amber-50/30 font-medium text-amber text-amber-700">₪{fmt(Math.round(p.period_sales))}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {selectedProducts.length === 0 && (
+            <div className="text-center py-12 text-gray-400">
+              <Package size={48} className="mx-auto mb-4 opacity-50" />
+              <p>בחר מוצרים להשוואה</p>
+              <p className="text-sm">חפש בשם או קטגוריה והוסף מוצרים</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// v1.10.9 - Store Product Comparison Modal (for comparing products within a specific store)
+const StoreProductComparisonModal = ({ products, storeName, onClose, onSelectProduct }) => {
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [searchTerm, setSearchTerm] = useState('');
+  const [dataPeriod, setDataPeriod] = useState('h2_2025');
+  const printRef = useRef(null);
+  
+  if (!products || products.length === 0) return null;
+  
+  // Calculate data for each product based on selected period
+  const productsWithData = useMemo(() => products.map(p => calcProductDataForPeriod(p, dataPeriod)), [products, dataPeriod]);
+  
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  
+  const removeSelected = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  };
+  
+  const clearSelection = () => setSelectedIds(new Set());
+  
+  // Filter products by search term
+  const searchResults = searchTerm.length >= 2 
+    ? productsWithData.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.category?.toLowerCase().includes(searchTerm.toLowerCase()))
+    : [];
+  
+  // Selected products for tables
+  const selectedProducts = productsWithData.filter(p => selectedIds.has(p.id));
+  
+  // PDF export
+  const handlePrintPDF = () => {
+    const printContent = printRef.current;
+    if (!printContent) return;
+    
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <html dir="rtl">
+      <head>
+        <title>השוואת מוצרים ב${storeName} - Baron</title>
+        <style>
+          * { box-sizing: border-box; font-family: Arial, sans-serif; }
+          body { padding: 20px; direction: rtl; }
+          h2 { color: #7c3aed; margin: 20px 0 10px; font-size: 18px; }
+          h3 { color: #0891b2; margin: 20px 0 10px; font-size: 16px; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11px; page-break-inside: auto; }
+          th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: center; }
+          th { background: #f3f4f6; font-weight: bold; }
+          tr { page-break-inside: avoid; }
+          .text-right { text-align: right; }
+          .text-emerald { color: #059669; }
+          .text-red { color: #dc2626; }
+          .text-blue { color: #2563eb; }
+          .text-green { color: #16a34a; }
+          .text-purple { color: #7c3aed; }
+          .text-amber { color: #d97706; }
+          .summary-row { background: #ede9fe; font-weight: bold; }
+          .summary-row-data { background: #cffafe; font-weight: bold; }
+          .small { font-size: 9px; color: #666; }
+          @media print { 
+            @page { margin: 1cm; size: landscape; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
+        </style>
+      </head>
+      <body>
+        <h1 style="text-align:center;color:#1f2937;">השוואת מוצרים ב${storeName} - Baron</h1>
+        <p style="text-align:center;color:#666;margin-bottom:20px;">${selectedProducts.length} מוצרים | ${new Date().toLocaleDateString('he-IL')}</p>
+        ${printContent.innerHTML}
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => { printWindow.print(); printWindow.close(); }, 250);
+  };
+  
+  // Export functions
+  const exportMetricsToCSV = () => {
+    if (selectedProducts.length === 0) return;
+    const cols = [
+      { k: 'name', l: 'מוצר' },
+      { k: 'category', l: 'קטגוריה' },
+      { k: 'status_long', l: 'סטטוס ארוך' },
+      { k: 'qty_2024', l: 'כמות 2024' },
+      { k: 'qty_2025', l: 'כמות 2025' },
+      { k: 'metric_12v12', l: 'שנתי %' },
+      { k: 'metric_3v3', l: '3 חודשים %' },
+      { k: 'metric_6v6', l: '6 חודשים %' },
+      { k: 'metric_2v2', l: '2 חודשים %' },
+      { k: 'status_short', l: 'סטטוס קצר' },
+    ];
+    exportCSV(selectedProducts, cols, `השוואת_מוצרים_${storeName}_מדדים`);
+  };
+  
+  const exportDataToCSV = () => {
+    if (selectedProducts.length === 0) return;
+    const periodLabel = getPeriodLabel(dataPeriod).replace(/[()]/g, '');
+    const cols = [
+      { k: 'name', l: 'מוצר' },
+      { k: 'category', l: 'קטגוריה' },
+      { k: 'period_gross', l: 'ברוטו' },
+      { k: 'period_net', l: 'נטו' },
+      { k: 'period_returns', l: 'חזרות' },
+      { k: 'period_returns_pct', l: 'חזרות %' },
+    ];
+    exportCSV(selectedProducts, cols, `השוואת_מוצרים_${storeName}_${periodLabel}`);
+  };
+  
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-2 md:p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white p-4 flex justify-between items-center print:hidden">
+          <div className="flex items-center gap-3">
+            <Package size={24} />
+            <h2 className="text-lg md:text-xl font-bold">השוואת מוצרים ב{storeName}</h2>
+            {selectedIds.size > 0 && <span className="bg-white/20 px-3 py-1 rounded-full text-sm">{selectedIds.size} נבחרו</span>}
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full">
+            <X size={24} />
+          </button>
+        </div>
+        
+        {/* Content */}
+        <div className="p-4 md:p-6 overflow-y-auto max-h-[calc(95vh-80px)] space-y-6">
+          
+          {/* Search & Selection Panel */}
+          <div className="bg-gray-50 rounded-xl p-4 border print:hidden">
+            <div className="flex flex-col md:flex-row gap-4">
+              {/* Search */}
+              <div className="flex-1">
+                <label className="text-sm font-medium text-gray-700 block mb-2">חיפוש מוצרים להוספה</label>
+                <div className="relative">
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    placeholder="הקלד לפחות 2 תווים..."
+                    className="w-full pr-10 pl-4 py-2 border rounded-xl focus:ring-2 focus:ring-fuchsia-500 focus:border-fuchsia-500"
+                  />
+                </div>
+                {/* Search Results */}
+                {searchResults.length > 0 && (
+                  <div className="mt-2 max-h-40 overflow-y-auto border rounded-lg bg-white">
+                    {searchResults.slice(0, 20).map(p => (
+                      <button
+                        key={p.id}
+                        onClick={() => { toggleSelect(p.id); setSearchTerm(''); }}
+                        className={`w-full text-right px-3 py-2 hover:bg-fuchsia-50 flex justify-between items-center border-b last:border-b-0 ${selectedIds.has(p.id) ? 'bg-fuchsia-100' : ''}`}
+                      >
+                        <span className="font-medium">{p.name}</span>
+                        <span className="text-sm text-gray-500">{p.category}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              
+              {/* Selected Products */}
+              <div className="flex-1">
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-sm font-medium text-gray-700">מוצרים שנבחרו ({selectedIds.size})</label>
+                  {selectedIds.size > 0 && (
+                    <button onClick={clearSelection} className="text-xs text-red-600 hover:text-red-800">נקה הכל</button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
+                  {selectedProducts.map(p => (
+                    <span key={p.id} className="inline-flex items-center gap-1 px-2 py-1 bg-fuchsia-100 text-fuchsia-800 rounded-full text-sm">
+                      {p.name}
+                      <button onClick={() => removeSelected(p.id)} className="hover:text-red-600">
+                        <X size={14} />
+                      </button>
+                    </span>
+                  ))}
+                  {selectedIds.size === 0 && <p className="text-gray-400 text-sm">חפש והוסף מוצרים להשוואה</p>}
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Tables - only show if products selected */}
+          {selectedProducts.length > 0 && (
+            <div ref={printRef}>
+              {/* Table 1: Metrics Comparison */}
+              <div className="mb-6">
+                <div className="flex justify-between items-center mb-3 print:hidden">
+                  <h3 className="text-lg font-bold flex items-center gap-2 text-fuchsia-700">
+                    <TrendingUp size={20} />
+                    השוואת מדדים
+                  </h3>
+                  <div className="flex gap-2">
+                    <button onClick={handlePrintPDF} className="flex items-center gap-1 px-3 py-1.5 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600">
+                      <FileText size={16} />PDF
+                    </button>
+                    <button onClick={exportMetricsToCSV} className="flex items-center gap-1 px-3 py-1.5 bg-fuchsia-500 text-white rounded-lg text-sm hover:bg-fuchsia-600">
+                      <Download size={16} />Excel
+                    </button>
+                  </div>
+                </div>
+                <h2 className="hidden print:block">השוואת מדדים</h2>
+                <div className="overflow-x-auto border rounded-xl print:border-0">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-100 text-gray-700">
+                        <th className="p-2 md:p-3 text-right border-b font-bold">#</th>
+                        <th className="p-2 md:p-3 text-right border-b font-bold min-w-[120px]">מוצר</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">סטטוס<br/>ארוך</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">שנתי<br/>24→25</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">3 חודשים</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">6 חודשים</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">2 חודשים</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">סטטוס<br/>קצר</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">כמות<br/>2025</th>
+                      </tr>
+                      {/* Summary Row */}
+                      <tr className="bg-fuchsia-50 font-bold text-fuchsia-800 border-b-2 border-fuchsia-300 summary-row">
+                        <td className="p-2 text-center">Σ</td>
+                        <td className="p-2 text-right">סה״כ {selectedProducts.length} מוצרים</td>
+                        <td className="p-2 text-center">-</td>
+                        <td className="p-2 text-center">
+                          <span className={(selectedProducts.reduce((s, x) => s + (x.metric_12v12 || 0), 0) / selectedProducts.length) >= 0 ? 'text-emerald-600' : 'text-red-600'}>
+                            {fmtPct(selectedProducts.reduce((s, x) => s + (x.metric_12v12 || 0), 0) / selectedProducts.length)}
+                          </span>
+                        </td>
+                        <td className="p-2 text-center">
+                          <span className={(selectedProducts.reduce((s, x) => s + (x.metric_3v3 || 0), 0) / selectedProducts.length) >= 0 ? 'text-emerald-600' : 'text-red-600'}>
+                            {fmtPct(selectedProducts.reduce((s, x) => s + (x.metric_3v3 || 0), 0) / selectedProducts.length)}
+                          </span>
+                        </td>
+                        <td className="p-2 text-center">
+                          <span className={(selectedProducts.reduce((s, x) => s + (x.metric_6v6 || 0), 0) / selectedProducts.length) >= 0 ? 'text-emerald-600' : 'text-red-600'}>
+                            {fmtPct(selectedProducts.reduce((s, x) => s + (x.metric_6v6 || 0), 0) / selectedProducts.length)}
+                          </span>
+                        </td>
+                        <td className="p-2 text-center">
+                          <span className={(selectedProducts.reduce((s, x) => s + (x.metric_2v2 || 0), 0) / selectedProducts.length) >= 0 ? 'text-emerald-600' : 'text-red-600'}>
+                            {fmtPct(selectedProducts.reduce((s, x) => s + (x.metric_2v2 || 0), 0) / selectedProducts.length)}
+                          </span>
+                        </td>
+                        <td className="p-2 text-center">-</td>
+                        <td className="p-2 text-center">{fmt(selectedProducts.reduce((s, x) => s + (x.qty_2025 || 0), 0))}</td>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...selectedProducts].sort((a, b) => (b.metric_12v12 || 0) - (a.metric_12v12 || 0)).map((p, i) => {
+                        const statusLongCfg = STATUS_CFG[p.status_long] || STATUS_CFG['יציב'];
+                        const statusShortCfg = STATUS_CFG[p.status_short] || STATUS_CFG['יציב'];
+                        return (
+                          <tr 
+                            key={p.id} 
+                            onClick={() => onSelectProduct && onSelectProduct(p)}
+                            className="hover:bg-fuchsia-50 border-b cursor-pointer transition-colors"
+                          >
+                            <td className="p-2 text-center font-bold">{i + 1}</td>
+                            <td className="p-2 text-right">
+                              <div className="font-medium">{p.name}</div>
+                              <div className="text-xs text-gray-500 small">{p.category}</div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <span className={`${statusLongCfg.bg} ${statusLongCfg.text} px-1.5 py-0.5 rounded text-xs whitespace-nowrap`}>{p.status_long || 'יציב'}</span>
+                            </td>
+                            <td className="p-2 text-center">
+                              <div className={`font-medium ${(p.metric_12v12 || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmtPct(p.metric_12v12)}</div>
+                              <div className="text-xs text-gray-400 small">{fmt(p.qty_2024)}→{fmt(p.qty_2025)}</div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <div className={`font-medium ${(p.metric_3v3 || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmtPct(p.metric_3v3)}</div>
+                              <div className="text-xs text-gray-400 small">{fmt(p.qty_prev3)}→{fmt(p.qty_last3)}</div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <div className={`font-medium ${(p.metric_6v6 || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmtPct(p.metric_6v6)}</div>
+                              <div className="text-xs text-gray-400 small">{fmt(p.qty_prev6)}→{fmt(p.qty_last6)}</div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <div className={`font-medium ${(p.metric_2v2 || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmtPct(p.metric_2v2)}</div>
+                              <div className="text-xs text-gray-400 small">{fmt(p.qty_prev2)}→{fmt(p.qty_last2)}</div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <span className={`${statusShortCfg.bg} ${statusShortCfg.text} px-1.5 py-0.5 rounded text-xs whitespace-nowrap`}>{p.status_short || 'יציב'}</span>
+                            </td>
+                            <td className="p-2 text-center font-medium">{fmt(p.qty_2025)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              
+              {/* Table 2: Data */}
+              <div>
+                <div className="flex justify-between items-center mb-3 print:hidden">
+                  <h3 className="text-lg font-bold flex items-center gap-2 text-pink-700">
+                    <BarChart3 size={20} />
+                    נתונים חודשיים
+                    <PeriodSelector value={dataPeriod} onChange={setDataPeriod} />
+                  </h3>
+                  <div className="flex gap-2">
+                    <button onClick={exportDataToCSV} className="flex items-center gap-1 px-3 py-1.5 bg-pink-500 text-white rounded-lg text-sm hover:bg-pink-600">
+                      <Download size={16} />Excel
+                    </button>
+                  </div>
+                </div>
+                <h3 className="hidden print:block">נתונים חודשיים ({getPeriodLabel(dataPeriod)})</h3>
+                <div className="overflow-x-auto border rounded-xl print:border-0">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-pink-50 text-gray-700">
+                        <th className="p-2 md:p-3 text-right border-b font-bold">#</th>
+                        <th className="p-2 md:p-3 text-right border-b font-bold min-w-[120px]">מוצר</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold bg-blue-50">ברוטו</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold bg-green-50">נטו</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold bg-red-50">חזרות</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold bg-red-50">חזרות %</th>
+                      </tr>
+                      {/* Summary Row */}
+                      <tr className="bg-pink-100 font-bold text-pink-800 border-b-2 border-pink-300 summary-row-data">
+                        <td className="p-2 text-center">Σ</td>
+                        <td className="p-2 text-right">סה״כ {selectedProducts.length} מוצרים</td>
+                        <td className="p-2 text-center text-blue-700">{fmt(selectedProducts.reduce((s, x) => s + x.period_gross, 0))}</td>
+                        <td className="p-2 text-center text-green-700">{fmt(selectedProducts.reduce((s, x) => s + x.period_net, 0))}</td>
+                        <td className="p-2 text-center text-red-600">{fmt(selectedProducts.reduce((s, x) => s + x.period_returns, 0))}</td>
+                        <td className="p-2 text-center text-red-600">
+                          {(selectedProducts.reduce((s, x) => s + x.period_gross, 0) > 0 
+                            ? (selectedProducts.reduce((s, x) => s + x.period_returns, 0) / selectedProducts.reduce((s, x) => s + x.period_gross, 0) * 100) 
+                            : 0).toFixed(1)}%
+                        </td>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...selectedProducts].sort((a, b) => (b.period_net || 0) - (a.period_net || 0)).map((p, i) => {
+                        const returnsPctColor = p.period_returns_pct > 20 ? 'text-red-600 font-bold' : p.period_returns_pct > 10 ? 'text-blue-600' : 'text-gray-600';
+                        return (
+                          <tr 
+                            key={p.id} 
+                            onClick={() => onSelectProduct && onSelectProduct(p)}
+                            className="hover:bg-pink-50 border-b cursor-pointer transition-colors"
+                          >
+                            <td className="p-2 text-center font-bold">{i + 1}</td>
+                            <td className="p-2 text-right">
+                              <div className="font-medium">{p.name}</div>
+                              <div className="text-xs text-gray-500 small">{p.category}</div>
+                            </td>
+                            <td className="p-2 text-center bg-blue-50/30 font-medium text-blue-700">{fmt(p.period_gross)}</td>
+                            <td className="p-2 text-center bg-green-50/30 font-medium text-green-700">{fmt(p.period_net)}</td>
+                            <td className="p-2 text-center bg-red-50/30 font-medium text-red-600">{fmt(p.period_returns)}</td>
+                            <td className={`p-2 text-center bg-red-50/30 ${returnsPctColor}`}>{p.period_returns_pct.toFixed(1)}%</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {selectedProducts.length === 0 && (
+            <div className="text-center py-12 text-gray-400">
+              <Package size={48} className="mx-auto mb-4 opacity-50" />
+              <p>בחר מוצרים להשוואה</p>
+              <p className="text-sm">חפש בשם או קטגוריה והוסף מוצרים</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // City Indicator - not shown in PDF
 const CityIndicator = ({ store, allStores, onSelectStore }) => {
   const [showModal, setShowModal] = useState(false);
@@ -2948,6 +3746,7 @@ const CityIndicator = ({ store, allStores, onSelectStore }) => {
 
 const StoreDetail = ({ store, onBack, allStores, excludedProducts = [], sourceWindow, rulesConfig, onSelectStore }) => {
   const chart = useMemo(() => { if (!store.monthly_qty) return []; return Object.entries(store.monthly_qty).sort(([a],[b]) => Number(a)-Number(b)).map(([m,v]) => ({ month: fmtMonth(m), qty: v })); }, [store]);
+  const [showProductComparison, setShowProductComparison] = useState(false);
   
   // Filter out excluded products AND apply rules config
   const allProds = STORE_PRODUCTS[String(store.id)] || [];
@@ -3134,7 +3933,27 @@ const StoreDetail = ({ store, onBack, allStores, excludedProducts = [], sourceWi
         ))}
       </div>
     </div>}
-    <div className="bg-white rounded-2xl shadow-lg p-6 border"><h3 className="text-lg font-bold mb-4">מוצרים בחנות ({prods.length}{excludedProducts.length > 0 ? ` מתוך ${allProds.length}` : ''})</h3>{prods.length > 0 ? <Table data={prods} cols={prodCols} name={'store_' + store.id + '_products'} compact /> : <p className="text-gray-500 text-center py-8">אין נתונים</p>}</div>
+    <div className="bg-white rounded-2xl shadow-lg p-6 border">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-bold">מוצרים בחנות ({prods.length}{excludedProducts.length > 0 ? ` מתוך ${allProds.length}` : ''})</h3>
+        {prods.length > 1 && (
+          <button onClick={() => setShowProductComparison(true)} className="flex items-center gap-2 px-3 py-1.5 bg-fuchsia-500 text-white rounded-lg text-sm hover:bg-fuchsia-600 print:hidden">
+            <BarChart3 size={16}/>
+            <span className="hidden sm:inline">השוואת מוצרים</span>
+          </button>
+        )}
+      </div>
+      {prods.length > 0 ? <Table data={prods} cols={prodCols} name={'store_' + store.id + '_products'} compact /> : <p className="text-gray-500 text-center py-8">אין נתונים</p>}
+    </div>
+    
+    {/* Product Comparison Modal for this store */}
+    {showProductComparison && (
+      <StoreProductComparisonModal 
+        products={prods}
+        storeName={store.name}
+        onClose={() => setShowProductComparison(false)}
+      />
+    )}
     
     {/* v1.8.1 - Missing Products Table */}
     <MissingProductsTable store={store} storeProducts={prods} allStores={allStores} />
@@ -3145,6 +3964,17 @@ const StoreDetail = ({ store, onBack, allStores, excludedProducts = [], sourceWi
 const ProductsList = ({ products, onSelect, filters, onFiltersChange }) => {
   // v1.8.8 - Use controlled filters from parent for history preservation
   const { cats, statusesLong, statusesShort, minQty, fallbackFilter, search: tableSearch, page: tablePage } = filters;
+  
+  // v1.10.9 - Table view tabs and comparison (like StoresList)
+  const [tableView, setTableView] = useState('metrics'); // 'metrics' or 'data'
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [showComparison, setShowComparison] = useState(false);
+  const [compSearchTerm, setCompSearchTerm] = useState('');
+  
+  // v1.10.9 - Period selection for data tables
+  const [dataPeriod, setDataPeriod] = useState('h2_2025');
+  const [compDataPeriod, setCompDataPeriod] = useState('h2_2025');
+  const printRef = useRef(null);
   
   // Helper to update a single filter
   const updateFilter = (key, value) => {
@@ -3161,7 +3991,62 @@ const ProductsList = ({ products, onSelect, filters, onFiltersChange }) => {
     return true; 
   }), [products, cats, statusesLong, statusesShort, minQty, fallbackFilter]);
   
-  const cols = [
+  // v1.10.9 - Calculate data for main table based on selected period
+  const productsWithData = useMemo(() => filtered.map(p => calcProductDataForPeriod(p, dataPeriod)), [filtered, dataPeriod]);
+  
+  // v1.10.9 - Calculate data for comparison modal based on its period
+  const productsWithCompData = useMemo(() => products.map(p => calcProductDataForPeriod(p, compDataPeriod)), [products, compDataPeriod]);
+  
+  // Calculate summary values for metrics table
+  const summaryData = useMemo(() => {
+    const count = filtered.length;
+    if (count === 0) return null;
+    const avg12v12 = filtered.reduce((s, x) => s + (x.metric_12v12 || 0), 0) / count;
+    const avg3v3 = filtered.reduce((s, x) => s + (x.metric_3v3 || 0), 0) / count;
+    const avg6v6 = filtered.reduce((s, x) => s + (x.metric_6v6 || 0), 0) / count;
+    const avg2v2 = filtered.reduce((s, x) => s + (x.metric_2v2 || 0), 0) / count;
+    const avgPeak = filtered.reduce((s, x) => s + (x.metric_peak_distance || 0), 0) / count;
+    const avgReturns = filtered.reduce((s, x) => s + (x.returns_pct_last6 || 0), 0) / count;
+    const totalQty = filtered.reduce((s, x) => s + (x.qty_total || 0), 0);
+    const totalSales = filtered.reduce((s, x) => s + (x.total_sales || 0), 0);
+    return { count, avg12v12, avg3v3, avg6v6, avg2v2, avgPeak, avgReturns, totalQty, totalSales };
+  }, [filtered]);
+  
+  // v1.10.9 - Data table summary
+  const dataSummary = useMemo(() => {
+    const count = productsWithData.length;
+    if (count === 0) return null;
+    const totalGross = productsWithData.reduce((s, x) => s + x.period_gross, 0);
+    const totalNet = productsWithData.reduce((s, x) => s + x.period_net, 0);
+    const totalReturns = productsWithData.reduce((s, x) => s + x.period_returns, 0);
+    const totalSales = productsWithData.reduce((s, x) => s + (x.period_sales || 0), 0);
+    const avgReturnsPct = totalGross > 0 ? (totalReturns / totalGross * 100) : 0;
+    return { count, totalGross, totalNet, totalReturns, totalSales, avgReturnsPct };
+  }, [productsWithData]);
+  
+  // Toggle product selection
+  const toggleSelect = (id, e) => {
+    e && e.stopPropagation();
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  
+  const clearSelection = () => setSelectedIds(new Set());
+  
+  // Search for comparison
+  const compSearchResults = compSearchTerm.length >= 2 
+    ? products.filter(p => p.name.toLowerCase().includes(compSearchTerm.toLowerCase()) || p.category?.toLowerCase().includes(compSearchTerm.toLowerCase())).slice(0, 15)
+    : [];
+  
+  const selectedProducts = products.filter(p => selectedIds.has(p.id));
+  
+  // Metrics columns with checkbox
+  const metricsCols = [
+    { k: 'select', l: '☑', r: (v, r) => <div onClick={e => { e.stopPropagation(); toggleSelect(r.id); }} className="w-10 h-10 flex items-center justify-center cursor-pointer hover:bg-violet-100 rounded-lg -m-2"><input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => {}} className="w-5 h-5 cursor-pointer pointer-events-none" /></div> },
     { k: 'name', l: 'מוצר', r: (v, r) => <div className="min-w-[100px]"><p className="font-medium text-sm leading-tight">{v}</p><p className="text-xs text-gray-500">{r.category}</p></div> },
     { k: 'status_long', l: 'סטטוס\nארוך', r: (v, r) => <LongTermBadge status={r.status_long || 'יציב'} isFallback={r.is_fallback} /> },
     { k: 'metric_12v12', l: 'שנתי\n24→25', t: METRIC_TIPS['12v12'], r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
@@ -3175,11 +4060,170 @@ const ProductsList = ({ products, onSelect, filters, onFiltersChange }) => {
     { k: 'qty_total', l: 'כמות', r: v => <span className="font-bold">{fmt(v)}</span> },
   ];
   
+  // Data columns (dynamic period)
+  const dataCols = [
+    { k: 'select', l: '☑', r: (v, r) => <div onClick={e => { e.stopPropagation(); toggleSelect(r.id); }} className="w-10 h-10 flex items-center justify-center cursor-pointer hover:bg-cyan-100 rounded-lg -m-2"><input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => {}} className="w-5 h-5 cursor-pointer pointer-events-none" /></div> },
+    { k: 'name', l: 'מוצר', r: (v, r) => <div className="min-w-[100px]"><p className="font-medium text-sm leading-tight">{v}</p><p className="text-xs text-gray-500">{r.category}</p></div> },
+    { k: 'period_gross', l: 'ברוטו', r: v => <span className="font-medium text-blue-700">{fmt(v)}</span> },
+    { k: 'period_net', l: 'נטו', r: v => <span className="font-medium text-green-700">{fmt(v)}</span> },
+    { k: 'period_returns', l: 'חזרות', r: v => <span className="font-medium text-red-600">{fmt(v)}</span> },
+    { k: 'period_returns_pct', l: 'חזרות\n%', r: v => <span className={v > 20 ? 'text-red-600 font-bold' : v > 10 ? 'text-blue-600' : 'text-gray-600'}>{(v || 0).toFixed(1)}%</span> },
+    { k: 'period_sales', l: 'מחזור ₪', r: v => <span className="font-medium text-amber-700">₪{fmt(Math.round(v || 0))}</span> },
+  ];
+  
+  // Build summary rows
+  const metricsSummaryRow = summaryData ? [
+    { value: '', className: 'text-center' },
+    { value: <span className="text-violet-700">Σ סה״כ {summaryData.count} מוצרים</span>, className: 'text-right' },
+    { value: '-', className: 'text-center text-gray-400' },
+    { value: <span className={summaryData.avg12v12 >= 0 ? 'text-emerald-600' : 'text-red-600'}>{fmtPct(summaryData.avg12v12)}</span>, className: 'text-center' },
+    { value: <span className={summaryData.avg3v3 >= 0 ? 'text-emerald-600' : 'text-red-600'}>{fmtPct(summaryData.avg3v3)}</span>, className: 'text-center' },
+    { value: <span className={summaryData.avg6v6 >= 0 ? 'text-emerald-600' : 'text-red-600'}>{fmtPct(summaryData.avg6v6)}</span>, className: 'text-center' },
+    { value: <span className={summaryData.avg2v2 >= 0 ? 'text-emerald-600' : 'text-red-600'}>{fmtPct(summaryData.avg2v2)}</span>, className: 'text-center' },
+    { value: '-', className: 'text-center text-gray-400' },
+    { value: <span className="text-red-600">{fmtPct(summaryData.avgPeak)}</span>, className: 'text-center' },
+    { value: <span className={summaryData.avgReturns > 15 ? 'text-red-600' : 'text-gray-700'}>{summaryData.avgReturns.toFixed(1)}%</span>, className: 'text-center' },
+    { value: <span className="font-bold text-gray-600">₪{fmt(summaryData.totalSales)}</span>, className: 'text-center' },
+    { value: <span className="font-bold text-violet-700">{fmt(summaryData.totalQty)}</span>, className: 'text-center' },
+  ] : null;
+  
+  const dataSummaryRow = dataSummary ? [
+    { value: '', className: 'text-center' },
+    { value: <span className="text-cyan-700">Σ סה״כ {dataSummary.count} מוצרים</span>, className: 'text-right' },
+    { value: <span className="font-bold text-blue-700">{fmt(dataSummary.totalGross)}</span>, className: 'text-center' },
+    { value: <span className="font-bold text-green-700">{fmt(dataSummary.totalNet)}</span>, className: 'text-center' },
+    { value: <span className="font-bold text-red-600">{fmt(dataSummary.totalReturns)}</span>, className: 'text-center' },
+    { value: <span className={dataSummary.avgReturnsPct > 15 ? 'text-red-600 font-bold' : 'text-gray-700'}>{dataSummary.avgReturnsPct.toFixed(1)}%</span>, className: 'text-center' },
+    { value: <span className="font-bold text-amber-700">₪{fmt(dataSummary.totalSales)}</span>, className: 'text-center' },
+  ] : null;
+  
+  // Export functions
+  const exportMetricsCSV = () => {
+    const cols = [
+      { k: 'name', l: 'מוצר' }, { k: 'category', l: 'קטגוריה' }, { k: 'status_long', l: 'סטטוס ארוך' },
+      { k: 'metric_12v12', l: 'שנתי %' }, { k: 'metric_3v3', l: '3 חודשים %' }, { k: 'metric_6v6', l: '6 חודשים %' }, { k: 'metric_2v2', l: '2 חודשים %' },
+      { k: 'status_short', l: 'סטטוס קצר' }, { k: 'metric_peak_distance', l: 'מרחק מהשיא %' }, { k: 'returns_pct_last6', l: 'חזרות %' }, 
+      { k: 'total_sales', l: 'מחזור' }, { k: 'qty_total', l: 'כמות' },
+    ];
+    exportCSV(filtered, cols, 'מוצרים_מדדים');
+  };
+  
+  const exportDataCSV = () => {
+    const periodLabel = getPeriodLabel(dataPeriod).replace(/[()]/g, '');
+    const cols = [
+      { k: 'name', l: 'מוצר' }, { k: 'category', l: 'קטגוריה' },
+      { k: 'period_gross', l: 'ברוטו' }, { k: 'period_net', l: 'נטו' }, { k: 'period_returns', l: 'חזרות' },
+      { k: 'period_returns_pct', l: 'חזרות %' }, { k: 'period_sales', l: 'מחזור' },
+    ];
+    exportCSV(productsWithData, cols, `מוצרים_נתונים_${periodLabel}`);
+  };
+  
+  // Comparison PDF export
+  const handleCompPrintPDF = () => {
+    const printContent = printRef.current;
+    if (!printContent) return;
+    
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <html dir="rtl">
+      <head>
+        <title>השוואת מוצרים - Baron</title>
+        <style>
+          * { box-sizing: border-box; font-family: Arial, sans-serif; }
+          body { padding: 20px; direction: rtl; }
+          h2 { color: #7c3aed; margin: 20px 0 10px; font-size: 18px; }
+          h3 { color: #0891b2; margin: 20px 0 10px; font-size: 16px; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11px; page-break-inside: auto; }
+          th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: center; }
+          th { background: #f3f4f6; font-weight: bold; }
+          tr { page-break-inside: avoid; }
+          .text-right { text-align: right; }
+          .text-emerald { color: #059669; }
+          .text-red { color: #dc2626; }
+          .text-blue { color: #2563eb; }
+          .text-green { color: #16a34a; }
+          .text-purple { color: #7c3aed; }
+          .text-amber { color: #d97706; }
+          .summary-row { background: #ede9fe; font-weight: bold; }
+          .summary-row-data { background: #cffafe; font-weight: bold; }
+          .small { font-size: 9px; color: #666; }
+          @media print { 
+            @page { margin: 1cm; size: landscape; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
+        </style>
+      </head>
+      <body>
+        <h1 style="text-align:center;color:#1f2937;">השוואת מוצרים נבחרים - Baron</h1>
+        <p style="text-align:center;color:#666;margin-bottom:20px;">${selectedProducts.length} מוצרים | ${new Date().toLocaleDateString('he-IL')}</p>
+        ${printContent.innerHTML}
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => { printWindow.print(); printWindow.close(); }, 250);
+  };
+  
+  // Export comparison to CSV
+  const exportCompMetricsCSV = () => {
+    if (selectedProducts.length === 0) return;
+    const cols = [
+      { k: 'name', l: 'מוצר' }, { k: 'category', l: 'קטגוריה' }, { k: 'status_long', l: 'סטטוס ארוך' },
+      { k: 'qty_2024', l: 'כמות 2024' }, { k: 'qty_2025', l: 'כמות 2025' },
+      { k: 'metric_12v12', l: 'שנתי %' }, { k: 'metric_3v3', l: '3 חודשים %' }, { k: 'metric_6v6', l: '6 חודשים %' }, { k: 'metric_2v2', l: '2 חודשים %' },
+      { k: 'status_short', l: 'סטטוס קצר' },
+    ];
+    exportCSV(selectedProducts, cols, 'השוואת_מוצרים_מדדים');
+  };
+  
+  const exportCompDataCSV = () => {
+    if (selectedProducts.length === 0) return;
+    const periodLabel = getPeriodLabel(compDataPeriod).replace(/[()]/g, '');
+    const selectedWithData = selectedProducts.map(p => calcProductDataForPeriod(p, compDataPeriod));
+    const cols = [
+      { k: 'name', l: 'מוצר' }, { k: 'category', l: 'קטגוריה' },
+      { k: 'period_gross', l: 'ברוטו' }, { k: 'period_net', l: 'נטו' }, { k: 'period_returns', l: 'חזרות' },
+      { k: 'period_returns_pct', l: 'חזרות %' }, { k: 'period_sales', l: 'מחזור' },
+    ];
+    exportCSV(selectedWithData, cols, `השוואת_מוצרים_${periodLabel}`);
+  };
+  
   return (<div className="space-y-4 w-full">
-    <div className="flex items-center justify-between">
+    <div className="flex items-center justify-between flex-wrap gap-2">
       <h2 className="text-xl font-bold">מוצרים ({filtered.length})</h2>
-      <button onClick={() => exportPDF('מוצרים - Baron')} className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl text-sm print:hidden"><FileText size={16}/>PDF</button>
+      <div className="flex gap-2 print:hidden">
+        {selectedIds.size > 0 && (
+          <button onClick={() => setShowComparison(true)} className="flex items-center gap-1 px-3 py-2 bg-violet-500 text-white rounded-xl text-sm hover:bg-violet-600">
+            <BarChart3 size={16} />השווה ({selectedIds.size})
+          </button>
+        )}
+        <button onClick={() => exportPDF('מוצרים - Baron')} className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl text-sm"><FileText size={16}/>PDF</button>
+        <button onClick={tableView === 'metrics' ? exportMetricsCSV : exportDataCSV} className="flex items-center gap-1 px-3 py-2 bg-emerald-500 text-white rounded-xl text-sm"><Download size={16}/>Excel</button>
+      </div>
     </div>
+    
+    {/* v1.10.9 - Table View Tabs */}
+    <div className="flex gap-2 print:hidden">
+      <button 
+        onClick={() => setTableView('metrics')}
+        className={`px-4 py-2 rounded-xl font-medium transition-colors ${tableView === 'metrics' ? 'bg-violet-500 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}
+      >
+        📊 מדדים
+      </button>
+      <button 
+        onClick={() => setTableView('data')}
+        className={`px-4 py-2 rounded-xl font-medium transition-colors ${tableView === 'data' ? 'bg-cyan-500 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}
+      >
+        📈 נתונים
+      </button>
+      {selectedIds.size > 0 && (
+        <button onClick={clearSelection} className="mr-auto text-sm text-red-600 hover:text-red-800 flex items-center gap-1">
+          <X size={14} /> נקה בחירה ({selectedIds.size})
+        </button>
+      )}
+    </div>
+    
     <div className="flex flex-wrap gap-3 items-center print:hidden">
       <MultiSelect opts={FILTERS.categories || []} selected={cats} onChange={(v) => updateFilter('cats', v)} placeholder="קטגוריה" />
       <MultiSelect opts={['עליה חדה','צמיחה','יציב','ירידה','התרסקות']} selected={statusesLong} onChange={(v) => updateFilter('statusesLong', v)} placeholder="סטטוס ארוך" />
@@ -3191,7 +4235,270 @@ const ProductsList = ({ products, onSelect, filters, onFiltersChange }) => {
       </select>
       <input type="number" value={minQty || ''} onChange={e => updateFilter('minQty', Number(e.target.value) || 0)} placeholder="מינ׳ 2025" className="w-32 px-3 py-2 border border-gray-200 rounded-xl text-sm" />
     </div>
-    <Table data={filtered} cols={cols} onRow={onSelect} name="products" search={tableSearch} onSearchChange={(v) => updateFilter('search', v)} page={tablePage} onPageChange={(v) => updateFilter('page', v)} />
+    
+    {/* Table based on view selection */}
+    {tableView === 'metrics' ? (
+      <Table data={filtered} cols={metricsCols} onRow={onSelect} name="products_metrics" search={tableSearch} onSearchChange={(v) => updateFilter('search', v)} page={tablePage} onPageChange={(v) => updateFilter('page', v)} summaryRow={metricsSummaryRow} />
+    ) : (
+      <Table data={productsWithData} cols={dataCols} onRow={onSelect} name="products_data" search={tableSearch} onSearchChange={(v) => updateFilter('search', v)} page={tablePage} onPageChange={(v) => updateFilter('page', v)} summaryRow={dataSummaryRow} periodSelector={<PeriodSelector value={dataPeriod} onChange={setDataPeriod} />} />
+    )}
+    
+    {/* v1.10.9 - Comparison Modal */}
+    {showComparison && selectedIds.size > 0 && (
+      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-2 md:p-4" onClick={() => setShowComparison(false)}>
+        <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+          {/* Header */}
+          <div className="bg-gradient-to-r from-violet-600 to-purple-600 text-white p-4 flex justify-between items-center print:hidden">
+            <div className="flex items-center gap-3">
+              <Package size={24} />
+              <h2 className="text-lg md:text-xl font-bold">השוואת מוצרים נבחרים</h2>
+              <span className="bg-white/20 px-3 py-1 rounded-full text-sm">{selectedIds.size} נבחרו</span>
+            </div>
+            <button onClick={() => setShowComparison(false)} className="p-2 hover:bg-white/20 rounded-full">
+              <X size={24} />
+            </button>
+          </div>
+          
+          {/* Content */}
+          <div className="p-4 md:p-6 overflow-y-auto max-h-[calc(95vh-80px)] space-y-6">
+            
+            {/* Search to add more */}
+            <div className="bg-gray-50 rounded-xl p-4 border print:hidden">
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex-1">
+                  <label className="text-sm font-medium text-gray-700 block mb-2">הוסף מוצרים נוספים</label>
+                  <div className="relative">
+                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="text"
+                      value={compSearchTerm}
+                      onChange={e => setCompSearchTerm(e.target.value)}
+                      placeholder="חפש מוצר..."
+                      className="w-full pr-10 pl-4 py-2 border rounded-xl"
+                    />
+                  </div>
+                  {compSearchResults.length > 0 && (
+                    <div className="mt-2 max-h-32 overflow-y-auto border rounded-lg bg-white">
+                      {compSearchResults.map(p => (
+                        <button
+                          key={p.id}
+                          onClick={() => { toggleSelect(p.id); setCompSearchTerm(''); }}
+                          className={`w-full text-right px-3 py-2 hover:bg-violet-50 flex justify-between items-center border-b last:border-b-0 ${selectedIds.has(p.id) ? 'bg-violet-100' : ''}`}
+                        >
+                          <span>{p.name}</span>
+                          <span className="text-sm text-gray-500">{p.category}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <label className="text-sm font-medium text-gray-700 block mb-2">מוצרים נבחרים ({selectedIds.size})</label>
+                  <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                    {selectedProducts.map(p => (
+                      <span key={p.id} className="inline-flex items-center gap-1 px-2 py-1 bg-violet-100 text-violet-800 rounded-full text-sm">
+                        {p.name}
+                        <button onClick={(e) => { e.stopPropagation(); toggleSelect(p.id); }} className="hover:text-red-600">
+                          <X size={14} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Tables */}
+            <div ref={printRef}>
+              {/* Table 1: Metrics */}
+              <div className="mb-6">
+                <div className="flex justify-between items-center mb-3 print:hidden">
+                  <h3 className="text-lg font-bold flex items-center gap-2 text-violet-700">
+                    <TrendingUp size={20} />
+                    השוואת מדדים
+                  </h3>
+                  <div className="flex gap-2">
+                    <button onClick={handleCompPrintPDF} className="flex items-center gap-1 px-3 py-1.5 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600">
+                      <FileText size={16} />PDF
+                    </button>
+                    <button onClick={exportCompMetricsCSV} className="flex items-center gap-1 px-3 py-1.5 bg-violet-500 text-white rounded-lg text-sm hover:bg-violet-600">
+                      <Download size={16} />Excel
+                    </button>
+                  </div>
+                </div>
+                <h2 className="hidden print:block">השוואת מדדים</h2>
+                <div className="overflow-x-auto border rounded-xl print:border-0">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-100 text-gray-700">
+                        <th className="p-2 md:p-3 text-right border-b font-bold">#</th>
+                        <th className="p-2 md:p-3 text-right border-b font-bold min-w-[120px]">מוצר</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">סטטוס<br/>ארוך</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">שנתי<br/>24→25</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">3 חודשים</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">6 חודשים</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">2 חודשים</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">סטטוס<br/>קצר</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">כמות<br/>2025</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">מחזור ₪</th>
+                      </tr>
+                      {/* Summary Row */}
+                      <tr className="bg-violet-50 font-bold text-violet-800 border-b-2 border-violet-300 summary-row">
+                        <td className="p-2 text-center">Σ</td>
+                        <td className="p-2 text-right">סה״כ {selectedProducts.length} מוצרים</td>
+                        <td className="p-2 text-center">-</td>
+                        <td className="p-2 text-center">
+                          <span className={(selectedProducts.reduce((s, x) => s + (x.metric_12v12 || 0), 0) / selectedProducts.length) >= 0 ? 'text-emerald text-emerald-600' : 'text-red text-red-600'}>
+                            {fmtPct(selectedProducts.reduce((s, x) => s + (x.metric_12v12 || 0), 0) / selectedProducts.length)}
+                          </span>
+                        </td>
+                        <td className="p-2 text-center">
+                          <span className={(selectedProducts.reduce((s, x) => s + (x.metric_3v3 || 0), 0) / selectedProducts.length) >= 0 ? 'text-emerald-600' : 'text-red-600'}>
+                            {fmtPct(selectedProducts.reduce((s, x) => s + (x.metric_3v3 || 0), 0) / selectedProducts.length)}
+                          </span>
+                        </td>
+                        <td className="p-2 text-center">
+                          <span className={(selectedProducts.reduce((s, x) => s + (x.metric_6v6 || 0), 0) / selectedProducts.length) >= 0 ? 'text-emerald-600' : 'text-red-600'}>
+                            {fmtPct(selectedProducts.reduce((s, x) => s + (x.metric_6v6 || 0), 0) / selectedProducts.length)}
+                          </span>
+                        </td>
+                        <td className="p-2 text-center">
+                          <span className={(selectedProducts.reduce((s, x) => s + (x.metric_2v2 || 0), 0) / selectedProducts.length) >= 0 ? 'text-emerald-600' : 'text-red-600'}>
+                            {fmtPct(selectedProducts.reduce((s, x) => s + (x.metric_2v2 || 0), 0) / selectedProducts.length)}
+                          </span>
+                        </td>
+                        <td className="p-2 text-center">-</td>
+                        <td className="p-2 text-center">{fmt(selectedProducts.reduce((s, x) => s + (x.qty_2025 || 0), 0))}</td>
+                        <td className="p-2 text-center">₪{fmt(selectedProducts.reduce((s, x) => s + (x.sales_2025 || 0), 0))}</td>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...selectedProducts].sort((a, b) => (b.metric_12v12 || 0) - (a.metric_12v12 || 0)).map((p, i) => {
+                        const statusLongCfg = STATUS_CFG[p.status_long] || STATUS_CFG['יציב'];
+                        const statusShortCfg = STATUS_CFG[p.status_short] || STATUS_CFG['יציב'];
+                        return (
+                          <tr 
+                            key={p.id} 
+                            onClick={() => { setShowComparison(false); onSelect(p); }}
+                            className="hover:bg-violet-50 border-b cursor-pointer transition-colors"
+                          >
+                            <td className="p-2 text-center font-bold">{i + 1}</td>
+                            <td className="p-2 text-right">
+                              <div className="font-medium">{p.name}</div>
+                              <div className="text-xs text-gray-500 small">{p.category}</div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <span className={`${statusLongCfg.bg} ${statusLongCfg.text} px-1.5 py-0.5 rounded text-xs whitespace-nowrap`}>{p.status_long || 'יציב'}</span>
+                            </td>
+                            <td className="p-2 text-center">
+                              <div className={`font-medium ${(p.metric_12v12 || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmtPct(p.metric_12v12)}</div>
+                              <div className="text-xs text-gray-400 small">{fmt(p.qty_2024)}→{fmt(p.qty_2025)}</div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <div className={`font-medium ${(p.metric_3v3 || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmtPct(p.metric_3v3)}</div>
+                              <div className="text-xs text-gray-400 small">{fmt(p.qty_prev3)}→{fmt(p.qty_last3)}</div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <div className={`font-medium ${(p.metric_6v6 || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmtPct(p.metric_6v6)}</div>
+                              <div className="text-xs text-gray-400 small">{fmt(p.qty_prev6)}→{fmt(p.qty_last6)}</div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <div className={`font-medium ${(p.metric_2v2 || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmtPct(p.metric_2v2)}</div>
+                              <div className="text-xs text-gray-400 small">{fmt(p.qty_prev2)}→{fmt(p.qty_last2)}</div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <span className={`${statusShortCfg.bg} ${statusShortCfg.text} px-1.5 py-0.5 rounded text-xs whitespace-nowrap`}>{p.status_short || 'יציב'}</span>
+                            </td>
+                            <td className="p-2 text-center font-medium">{fmt(p.qty_2025)}</td>
+                            <td className="p-2 text-center">₪{fmt(p.sales_2025)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              
+              {/* Table 2: Data */}
+              <div>
+                <div className="flex justify-between items-center mb-3 print:hidden">
+                  <h3 className="text-lg font-bold flex items-center gap-2 text-cyan-700">
+                    <BarChart3 size={20} />
+                    נתונים חודשיים
+                    <PeriodSelector value={compDataPeriod} onChange={setCompDataPeriod} className="print:hidden" />
+                    <span className="hidden print:inline text-sm text-gray-500">({getPeriodLabel(compDataPeriod)})</span>
+                  </h3>
+                  <div className="flex gap-2">
+                    <button onClick={exportCompDataCSV} className="flex items-center gap-1 px-3 py-1.5 bg-cyan-500 text-white rounded-lg text-sm hover:bg-cyan-600">
+                      <Download size={16} />Excel
+                    </button>
+                  </div>
+                </div>
+                <h3 className="hidden print:block">נתונים חודשיים ({getPeriodLabel(compDataPeriod)})</h3>
+                <div className="overflow-x-auto border rounded-xl print:border-0">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-cyan-50 text-gray-700">
+                        <th className="p-2 md:p-3 text-right border-b font-bold">#</th>
+                        <th className="p-2 md:p-3 text-right border-b font-bold min-w-[120px]">מוצר</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold bg-blue-50">ברוטו</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold bg-green-50">נטו</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold bg-red-50">חזרות</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold bg-red-50">חזרות %</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold bg-amber-50">מחזור ₪</th>
+                      </tr>
+                      {/* Summary Row */}
+                      {(() => {
+                        const compProducts = selectedProducts.map(p => calcProductDataForPeriod(p, compDataPeriod));
+                        const totalGross = compProducts.reduce((s, x) => s + x.period_gross, 0);
+                        const totalNet = compProducts.reduce((s, x) => s + x.period_net, 0);
+                        const totalReturns = compProducts.reduce((s, x) => s + x.period_returns, 0);
+                        const totalSales = compProducts.reduce((s, x) => s + (x.period_sales || 0), 0);
+                        const avgReturnsPct = totalGross > 0 ? (totalReturns / totalGross * 100) : 0;
+                        return (
+                          <tr className="bg-cyan-100 font-bold text-cyan-800 border-b-2 border-cyan-300 summary-row-data">
+                            <td className="p-2 text-center">Σ</td>
+                            <td className="p-2 text-right">סה״כ {selectedProducts.length} מוצרים</td>
+                            <td className="p-2 text-center text-blue-700">{fmt(totalGross)}</td>
+                            <td className="p-2 text-center text-green-700">{fmt(totalNet)}</td>
+                            <td className="p-2 text-center text-red-600">{fmt(totalReturns)}</td>
+                            <td className="p-2 text-center text-red-600">{avgReturnsPct.toFixed(1)}%</td>
+                            <td className="p-2 text-center text-amber-700">₪{fmt(totalSales)}</td>
+                          </tr>
+                        );
+                      })()}
+                    </thead>
+                    <tbody>
+                      {[...selectedProducts].map(p => calcProductDataForPeriod(p, compDataPeriod)).sort((a, b) => (b.period_net || 0) - (a.period_net || 0)).map((p, i) => {
+                        const returnsPctColor = p.period_returns_pct > 20 ? 'text-red-600 font-bold' : p.period_returns_pct > 10 ? 'text-blue-600' : 'text-gray-600';
+                        return (
+                          <tr 
+                            key={p.id} 
+                            onClick={() => { setShowComparison(false); onSelect(p); }}
+                            className="hover:bg-cyan-50 border-b cursor-pointer transition-colors"
+                          >
+                            <td className="p-2 text-center font-bold">{i + 1}</td>
+                            <td className="p-2 text-right">
+                              <div className="font-medium">{p.name}</div>
+                              <div className="text-xs text-gray-500 small">{p.category}</div>
+                            </td>
+                            <td className="p-2 text-center bg-blue-50/30 font-medium text-blue-700">{fmt(p.period_gross)}</td>
+                            <td className="p-2 text-center bg-green-50/30 font-medium text-green-700">{fmt(p.period_net)}</td>
+                            <td className="p-2 text-center bg-red-50/30 font-medium text-red-600">{fmt(p.period_returns)}</td>
+                            <td className={`p-2 text-center bg-red-50/30 ${returnsPctColor}`}>{(p.period_returns_pct || 0).toFixed(1)}%</td>
+                            <td className="p-2 text-center bg-amber-50/30 font-medium text-amber-700">₪{fmt(Math.round(p.period_sales || 0))}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
   </div>)
 };
 
@@ -3203,7 +4510,70 @@ const ProductDetail = ({ product, onBack, rulesConfig }) => {
   const allStores = useMemo(() => applyConfig(allStoresRaw, rulesConfig || DEFAULT_RULES_CONFIG), [allStoresRaw, rulesConfig]);
   const stores = useMemo(() => minQty > 0 ? allStores.filter(s => (s.qty_2025 || 0) >= minQty) : allStores, [allStores, minQty]);
   
-  const storeCols = [
+  // v1.10.9 - Table view tabs and comparison for stores (like StoresList)
+  const [tableView, setTableView] = useState('metrics'); // 'metrics' or 'data'
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [showComparison, setShowComparison] = useState(false);
+  const [compSearchTerm, setCompSearchTerm] = useState('');
+  
+  // v1.10.9 - Period selection for data tables
+  const [dataPeriod, setDataPeriod] = useState('h2_2025');
+  const [compDataPeriod, setCompDataPeriod] = useState('h2_2025');
+  const printRef = useRef(null);
+  
+  // v1.10.9 - Calculate data for stores based on selected period
+  const storesWithData = useMemo(() => stores.map(s => calcStoreDataForPeriod(s, dataPeriod)), [stores, dataPeriod]);
+  
+  // Calculate summary values for metrics table
+  const summaryData = useMemo(() => {
+    const count = stores.length;
+    if (count === 0) return null;
+    const avg12v12 = stores.reduce((s, x) => s + (x.metric_12v12 || 0), 0) / count;
+    const avg3v3 = stores.reduce((s, x) => s + (x.metric_3v3 || 0), 0) / count;
+    const avg6v6 = stores.reduce((s, x) => s + (x.metric_6v6 || 0), 0) / count;
+    const avg2v2 = stores.reduce((s, x) => s + (x.metric_2v2 || 0), 0) / count;
+    const avgPeak = stores.reduce((s, x) => s + (x.metric_peak_distance || 0), 0) / count;
+    const avgReturns = stores.reduce((s, x) => s + (x.returns_pct_last6 || 0), 0) / count;
+    const totalQty = stores.reduce((s, x) => s + (x.qty_total || 0), 0);
+    return { count, avg12v12, avg3v3, avg6v6, avg2v2, avgPeak, avgReturns, totalQty };
+  }, [stores]);
+  
+  // v1.10.9 - Data table summary
+  const dataSummary = useMemo(() => {
+    const count = storesWithData.length;
+    if (count === 0) return null;
+    const totalGross = storesWithData.reduce((s, x) => s + x.period_gross, 0);
+    const totalNet = storesWithData.reduce((s, x) => s + x.period_net, 0);
+    const totalReturns = storesWithData.reduce((s, x) => s + x.period_returns, 0);
+    const totalDeliveries = storesWithData.reduce((s, x) => s + x.period_deliveries, 0);
+    const avgReturnsPct = totalGross > 0 ? (totalReturns / totalGross * 100) : 0;
+    const avgPerDelivery = totalDeliveries > 0 ? (totalNet / totalDeliveries) : 0;
+    return { count, totalGross, totalNet, totalReturns, totalDeliveries, avgReturnsPct, avgPerDelivery };
+  }, [storesWithData]);
+  
+  // Toggle store selection
+  const toggleSelect = (id, e) => {
+    e && e.stopPropagation();
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  
+  const clearSelection = () => setSelectedIds(new Set());
+  
+  // Search for comparison
+  const compSearchResults = compSearchTerm.length >= 2 
+    ? stores.filter(s => s.name.toLowerCase().includes(compSearchTerm.toLowerCase()) || s.city?.toLowerCase().includes(compSearchTerm.toLowerCase())).slice(0, 15)
+    : [];
+  
+  const selectedStores = stores.filter(s => selectedIds.has(s.id));
+  
+  // Metrics columns with checkbox
+  const storeMetricsCols = [
+    { k: 'select', l: '☑', r: (v, r) => <div onClick={e => { e.stopPropagation(); toggleSelect(r.id); }} className="w-10 h-10 flex items-center justify-center cursor-pointer hover:bg-emerald-100 rounded-lg -m-2"><input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => {}} className="w-5 h-5 cursor-pointer pointer-events-none" /></div> },
     { k: 'name', l: 'חנות', r: (v, r) => <div className="min-w-[120px]"><p className="font-medium text-sm leading-tight">{v}</p><p className="text-xs text-gray-500">{r.city}</p></div> },
     { k: 'status_long', l: 'סטטוס\nארוך', r: (v, r) => <LongTermBadge status={r.status_long || 'יציב'} sm isFallback={r.is_fallback} /> },
     { k: 'metric_12v12', l: 'שנתי\n24→25', t: METRIC_TIPS['12v12'], r: (v, r) => <MetricCell pct={v} from={r.qty_2024} to={r.qty_2025} /> },
@@ -3220,6 +4590,134 @@ const ProductDetail = ({ product, onBack, rulesConfig }) => {
     }},
     { k: 'qty_total', l: 'כמות', r: v => <span className="font-bold">{fmt(v)}</span> },
   ];
+  
+  // Data columns (dynamic period)
+  const storeDataCols = [
+    { k: 'select', l: '☑', r: (v, r) => <div onClick={e => { e.stopPropagation(); toggleSelect(r.id); }} className="w-10 h-10 flex items-center justify-center cursor-pointer hover:bg-purple-100 rounded-lg -m-2"><input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => {}} className="w-5 h-5 cursor-pointer pointer-events-none" /></div> },
+    { k: 'name', l: 'חנות', r: (v, r) => <div className="min-w-[100px]"><p className="font-medium text-sm leading-tight">{v}</p><p className="text-xs text-gray-500">{r.city}</p></div> },
+    { k: 'period_gross', l: 'ברוטו', r: v => <span className="font-medium text-blue-700">{fmt(v)}</span> },
+    { k: 'period_net', l: 'נטו', r: v => <span className="font-medium text-green-700">{fmt(v)}</span> },
+    { k: 'period_returns', l: 'חזרות', r: v => <span className="font-medium text-red-600">{fmt(v)}</span> },
+    { k: 'period_returns_pct', l: 'חזרות\n%', r: v => <span className={v > 20 ? 'text-red-600 font-bold' : v > 10 ? 'text-blue-600' : 'text-gray-600'}>{(v || 0).toFixed(1)}%</span> },
+    { k: 'period_deliveries', l: 'אספקות', r: v => <span className="font-medium text-violet-700">{fmt(v)}</span> },
+    { k: 'period_avg_per_delivery', l: 'ממוצע\nלאספקה', r: v => <span className="font-medium text-blue-700">{fmt(Math.round(v || 0))}</span> },
+  ];
+  
+  // Build summary rows
+  const metricsSummaryRow = summaryData ? [
+    { value: '', className: 'text-center' },
+    { value: <span className="text-emerald-700">Σ סה״כ {summaryData.count} חנויות</span>, className: 'text-right' },
+    { value: '-', className: 'text-center text-gray-400' },
+    { value: <span className={summaryData.avg12v12 >= 0 ? 'text-emerald-600' : 'text-red-600'}>{fmtPct(summaryData.avg12v12)}</span>, className: 'text-center' },
+    { value: <span className={summaryData.avg3v3 >= 0 ? 'text-emerald-600' : 'text-red-600'}>{fmtPct(summaryData.avg3v3)}</span>, className: 'text-center' },
+    { value: <span className={summaryData.avg6v6 >= 0 ? 'text-emerald-600' : 'text-red-600'}>{fmtPct(summaryData.avg6v6)}</span>, className: 'text-center' },
+    { value: <span className={summaryData.avg2v2 >= 0 ? 'text-emerald-600' : 'text-red-600'}>{fmtPct(summaryData.avg2v2)}</span>, className: 'text-center' },
+    { value: '-', className: 'text-center text-gray-400' },
+    { value: <span className="text-red-600">{fmtPct(summaryData.avgPeak)}</span>, className: 'text-center' },
+    { value: <span className={summaryData.avgReturns > 15 ? 'text-red-600' : 'text-gray-700'}>{summaryData.avgReturns.toFixed(1)}%</span>, className: 'text-center' },
+    { value: <span className="font-bold text-emerald-700">{fmt(summaryData.totalQty)}</span>, className: 'text-center' },
+  ] : null;
+  
+  const dataSummaryRow = dataSummary ? [
+    { value: '', className: 'text-center' },
+    { value: <span className="text-purple-700">Σ סה״כ {dataSummary.count} חנויות</span>, className: 'text-right' },
+    { value: <span className="font-bold text-blue-700">{fmt(dataSummary.totalGross)}</span>, className: 'text-center' },
+    { value: <span className="font-bold text-green-700">{fmt(dataSummary.totalNet)}</span>, className: 'text-center' },
+    { value: <span className="font-bold text-red-600">{fmt(dataSummary.totalReturns)}</span>, className: 'text-center' },
+    { value: <span className={dataSummary.avgReturnsPct > 15 ? 'text-red-600 font-bold' : 'text-gray-700'}>{dataSummary.avgReturnsPct.toFixed(1)}%</span>, className: 'text-center' },
+    { value: <span className="font-bold text-violet-700">{fmt(dataSummary.totalDeliveries)}</span>, className: 'text-center' },
+    { value: <span className="font-bold text-blue-700">{fmt(Math.round(dataSummary.avgPerDelivery))}</span>, className: 'text-center' },
+  ] : null;
+  
+  // Export functions
+  const exportMetricsCSV = () => {
+    const cols = [
+      { k: 'name', l: 'חנות' }, { k: 'city', l: 'עיר' }, { k: 'status_long', l: 'סטטוס ארוך' },
+      { k: 'metric_12v12', l: 'שנתי %' }, { k: 'metric_3v3', l: '3 חודשים %' }, { k: 'metric_6v6', l: '6 חודשים %' }, { k: 'metric_2v2', l: '2 חודשים %' },
+      { k: 'status_short', l: 'סטטוס קצר' }, { k: 'metric_peak_distance', l: 'מרחק מהשיא %' }, { k: 'returns_pct_last6', l: 'חזרות %' }, { k: 'qty_total', l: 'כמות' },
+    ];
+    exportCSV(stores, cols, `חנויות_${product.name}_מדדים`);
+  };
+  
+  const exportDataCSV = () => {
+    const periodLabel = getPeriodLabel(dataPeriod).replace(/[()]/g, '');
+    const cols = [
+      { k: 'name', l: 'חנות' }, { k: 'city', l: 'עיר' },
+      { k: 'period_gross', l: 'ברוטו' }, { k: 'period_net', l: 'נטו' }, { k: 'period_returns', l: 'חזרות' },
+      { k: 'period_returns_pct', l: 'חזרות %' }, { k: 'period_deliveries', l: 'אספקות' }, { k: 'period_avg_per_delivery', l: 'ממוצע לאספקה' },
+    ];
+    exportCSV(storesWithData, cols, `חנויות_${product.name}_נתונים_${periodLabel}`);
+  };
+  
+  // Comparison PDF export
+  const handleCompPrintPDF = () => {
+    const printContent = printRef.current;
+    if (!printContent) return;
+    
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <html dir="rtl">
+      <head>
+        <title>השוואת חנויות - ${product.name} - Baron</title>
+        <style>
+          * { box-sizing: border-box; font-family: Arial, sans-serif; }
+          body { padding: 20px; direction: rtl; }
+          h2 { color: #059669; margin: 20px 0 10px; font-size: 18px; }
+          h3 { color: #7c3aed; margin: 20px 0 10px; font-size: 16px; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11px; page-break-inside: auto; }
+          th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: center; }
+          th { background: #f3f4f6; font-weight: bold; }
+          tr { page-break-inside: avoid; }
+          .text-right { text-align: right; }
+          .text-emerald { color: #059669; }
+          .text-red { color: #dc2626; }
+          .text-blue { color: #2563eb; }
+          .text-green { color: #16a34a; }
+          .text-purple { color: #7c3aed; }
+          .summary-row { background: #d1fae5; font-weight: bold; }
+          .summary-row-data { background: #ede9fe; font-weight: bold; }
+          .small { font-size: 9px; color: #666; }
+          @media print { 
+            @page { margin: 1cm; size: landscape; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
+        </style>
+      </head>
+      <body>
+        <h1 style="text-align:center;color:#1f2937;">השוואת חנויות - ${product.name} - Baron</h1>
+        <p style="text-align:center;color:#666;margin-bottom:20px;">${selectedStores.length} חנויות | ${new Date().toLocaleDateString('he-IL')}</p>
+        ${printContent.innerHTML}
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => { printWindow.print(); printWindow.close(); }, 250);
+  };
+  
+  // Export comparison to CSV
+  const exportCompMetricsCSV = () => {
+    if (selectedStores.length === 0) return;
+    const cols = [
+      { k: 'name', l: 'חנות' }, { k: 'city', l: 'עיר' }, { k: 'status_long', l: 'סטטוס ארוך' },
+      { k: 'qty_2024', l: 'כמות 2024' }, { k: 'qty_2025', l: 'כמות 2025' },
+      { k: 'metric_12v12', l: 'שנתי %' }, { k: 'metric_3v3', l: '3 חודשים %' }, { k: 'metric_6v6', l: '6 חודשים %' }, { k: 'metric_2v2', l: '2 חודשים %' },
+      { k: 'status_short', l: 'סטטוס קצר' },
+    ];
+    exportCSV(selectedStores, cols, `השוואת_חנויות_${product.name}_מדדים`);
+  };
+  
+  const exportCompDataCSV = () => {
+    if (selectedStores.length === 0) return;
+    const periodLabel = getPeriodLabel(compDataPeriod).replace(/[()]/g, '');
+    const selectedWithData = selectedStores.map(s => calcStoreDataForPeriod(s, compDataPeriod));
+    const cols = [
+      { k: 'name', l: 'חנות' }, { k: 'city', l: 'עיר' },
+      { k: 'period_gross', l: 'ברוטו' }, { k: 'period_net', l: 'נטו' }, { k: 'period_returns', l: 'חזרות' },
+      { k: 'period_returns_pct', l: 'חזרות %' }, { k: 'period_deliveries', l: 'אספקות' }, { k: 'period_avg_per_delivery', l: 'ממוצע לאספקה' },
+    ];
+    exportCSV(selectedWithData, cols, `השוואת_חנויות_${product.name}_${periodLabel}`);
+  };
   
   return (<div className="space-y-6">
     <div className="flex justify-between items-center print:hidden">
@@ -3249,16 +4747,303 @@ const ProductDetail = ({ product, onBack, rulesConfig }) => {
     {/* v1.8.1 - Monthly Sales Chart (Table + Graph combined) */}
     <MonthlySalesChart data={product.monthly_qty} title={`מכירות חודשיות - ${product.name}`} />
     <div className="bg-white rounded-2xl shadow-lg p-6 border"><h3 className="text-lg font-bold mb-4">מגמת כמויות (כל התקופה)</h3><ResponsiveContainer width="100%" height={250}><AreaChart data={chart}><defs><linearGradient id="pg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/><stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" tick={{fontSize:10}} /><YAxis tickFormatter={v => fmt(v)} tick={{fontSize:10}} /><Tooltip formatter={v => fmt(v)} /><Area type="monotone" dataKey="qty" stroke="#8b5cf6" fill="url(#pg)" name="כמות" /></AreaChart></ResponsiveContainer></div>
+    
+    {/* v1.10.9 - Stores Table with Tabs */}
     <div className="bg-white rounded-2xl shadow-lg p-6 border">
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
         <h3 className="text-lg font-bold">חנויות שמוכרות ({stores.length}{minQty > 0 ? ` מתוך ${allStores.length}` : ''})</h3>
         <div className="flex items-center gap-2 print:hidden">
-          <label className="text-sm text-gray-600">מינימום פריטים:</label>
-          <input type="number" value={minQty || ''} onChange={e => setMinQty(Number(e.target.value) || 0)} placeholder="0" className="w-24 px-3 py-1.5 border border-gray-200 rounded-lg text-sm" />
+          {selectedIds.size > 0 && (
+            <button onClick={() => setShowComparison(true)} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-sm hover:bg-emerald-600">
+              <BarChart3 size={16} />השווה ({selectedIds.size})
+            </button>
+          )}
+          <button onClick={tableView === 'metrics' ? exportMetricsCSV : exportDataCSV} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-sm"><Download size={16}/>Excel</button>
+          <label className="text-sm text-gray-600">מינ׳:</label>
+          <input type="number" value={minQty || ''} onChange={e => setMinQty(Number(e.target.value) || 0)} placeholder="0" className="w-20 px-2 py-1.5 border border-gray-200 rounded-lg text-sm" />
         </div>
       </div>
-      {stores.length > 0 ? <Table data={stores} cols={storeCols} name={'product_' + product.id + '_stores'} compact /> : <p className="text-gray-500 text-center py-8">אין נתונים</p>}
+      
+      {/* v1.10.9 - Table View Tabs */}
+      <div className="flex gap-2 mb-4 print:hidden">
+        <button 
+          onClick={() => setTableView('metrics')}
+          className={`px-4 py-2 rounded-xl font-medium transition-colors ${tableView === 'metrics' ? 'bg-emerald-500 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}
+        >
+          📊 מדדים
+        </button>
+        <button 
+          onClick={() => setTableView('data')}
+          className={`px-4 py-2 rounded-xl font-medium transition-colors ${tableView === 'data' ? 'bg-purple-500 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}
+        >
+          📈 נתונים
+        </button>
+        {selectedIds.size > 0 && (
+          <button onClick={clearSelection} className="mr-auto text-sm text-red-600 hover:text-red-800 flex items-center gap-1">
+            <X size={14} /> נקה בחירה ({selectedIds.size})
+          </button>
+        )}
+      </div>
+      
+      {/* Table based on view selection */}
+      {stores.length > 0 ? (
+        tableView === 'metrics' ? (
+          <Table data={stores} cols={storeMetricsCols} name={'product_' + product.id + '_stores_metrics'} compact summaryRow={metricsSummaryRow} />
+        ) : (
+          <Table data={storesWithData} cols={storeDataCols} name={'product_' + product.id + '_stores_data'} compact summaryRow={dataSummaryRow} periodSelector={<PeriodSelector value={dataPeriod} onChange={setDataPeriod} />} />
+        )
+      ) : <p className="text-gray-500 text-center py-8">אין נתונים</p>}
     </div>
+    
+    {/* v1.10.9 - Stores Comparison Modal */}
+    {showComparison && selectedIds.size > 0 && (
+      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-2 md:p-4" onClick={() => setShowComparison(false)}>
+        <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+          {/* Header */}
+          <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-4 flex justify-between items-center print:hidden">
+            <div className="flex items-center gap-3">
+              <Store size={24} />
+              <h2 className="text-lg md:text-xl font-bold">השוואת חנויות - {product.name}</h2>
+              <span className="bg-white/20 px-3 py-1 rounded-full text-sm">{selectedIds.size} נבחרו</span>
+            </div>
+            <button onClick={() => setShowComparison(false)} className="p-2 hover:bg-white/20 rounded-full">
+              <X size={24} />
+            </button>
+          </div>
+          
+          {/* Content */}
+          <div className="p-4 md:p-6 overflow-y-auto max-h-[calc(95vh-80px)] space-y-6">
+            
+            {/* Search to add more */}
+            <div className="bg-gray-50 rounded-xl p-4 border print:hidden">
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex-1">
+                  <label className="text-sm font-medium text-gray-700 block mb-2">הוסף חנויות נוספות</label>
+                  <div className="relative">
+                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="text"
+                      value={compSearchTerm}
+                      onChange={e => setCompSearchTerm(e.target.value)}
+                      placeholder="חפש חנות..."
+                      className="w-full pr-10 pl-4 py-2 border rounded-xl"
+                    />
+                  </div>
+                  {compSearchResults.length > 0 && (
+                    <div className="mt-2 max-h-32 overflow-y-auto border rounded-lg bg-white">
+                      {compSearchResults.map(s => (
+                        <button
+                          key={s.id}
+                          onClick={() => { toggleSelect(s.id); setCompSearchTerm(''); }}
+                          className={`w-full text-right px-3 py-2 hover:bg-emerald-50 flex justify-between items-center border-b last:border-b-0 ${selectedIds.has(s.id) ? 'bg-emerald-100' : ''}`}
+                        >
+                          <span>{s.name}</span>
+                          <span className="text-sm text-gray-500">{s.city}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <label className="text-sm font-medium text-gray-700 block mb-2">חנויות נבחרות ({selectedIds.size})</label>
+                  <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                    {selectedStores.map(s => (
+                      <span key={s.id} className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-100 text-emerald-800 rounded-full text-sm">
+                        {s.name}
+                        <button onClick={(e) => { e.stopPropagation(); toggleSelect(s.id); }} className="hover:text-red-600">
+                          <X size={14} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Tables */}
+            <div ref={printRef}>
+              {/* Table 1: Metrics */}
+              <div className="mb-6">
+                <div className="flex justify-between items-center mb-3 print:hidden">
+                  <h3 className="text-lg font-bold flex items-center gap-2 text-emerald-700">
+                    <TrendingUp size={20} />
+                    השוואת מדדים
+                  </h3>
+                  <div className="flex gap-2">
+                    <button onClick={handleCompPrintPDF} className="flex items-center gap-1 px-3 py-1.5 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600">
+                      <FileText size={16} />PDF
+                    </button>
+                    <button onClick={exportCompMetricsCSV} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-sm hover:bg-emerald-600">
+                      <Download size={16} />Excel
+                    </button>
+                  </div>
+                </div>
+                <h2 className="hidden print:block">השוואת מדדים</h2>
+                <div className="overflow-x-auto border rounded-xl print:border-0">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-100 text-gray-700">
+                        <th className="p-2 md:p-3 text-right border-b font-bold">#</th>
+                        <th className="p-2 md:p-3 text-right border-b font-bold min-w-[120px]">חנות</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">סטטוס<br/>ארוך</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">שנתי<br/>24→25</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">3 חודשים</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">6 חודשים</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">2 חודשים</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">סטטוס<br/>קצר</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold">כמות<br/>2025</th>
+                      </tr>
+                      {/* Summary Row */}
+                      <tr className="bg-emerald-50 font-bold text-emerald-800 border-b-2 border-emerald-300 summary-row">
+                        <td className="p-2 text-center">Σ</td>
+                        <td className="p-2 text-right">סה״כ {selectedStores.length} חנויות</td>
+                        <td className="p-2 text-center">-</td>
+                        <td className="p-2 text-center">
+                          <span className={(selectedStores.reduce((s, x) => s + (x.metric_12v12 || 0), 0) / selectedStores.length) >= 0 ? 'text-emerald-600' : 'text-red-600'}>
+                            {fmtPct(selectedStores.reduce((s, x) => s + (x.metric_12v12 || 0), 0) / selectedStores.length)}
+                          </span>
+                        </td>
+                        <td className="p-2 text-center">
+                          <span className={(selectedStores.reduce((s, x) => s + (x.metric_3v3 || 0), 0) / selectedStores.length) >= 0 ? 'text-emerald-600' : 'text-red-600'}>
+                            {fmtPct(selectedStores.reduce((s, x) => s + (x.metric_3v3 || 0), 0) / selectedStores.length)}
+                          </span>
+                        </td>
+                        <td className="p-2 text-center">
+                          <span className={(selectedStores.reduce((s, x) => s + (x.metric_6v6 || 0), 0) / selectedStores.length) >= 0 ? 'text-emerald-600' : 'text-red-600'}>
+                            {fmtPct(selectedStores.reduce((s, x) => s + (x.metric_6v6 || 0), 0) / selectedStores.length)}
+                          </span>
+                        </td>
+                        <td className="p-2 text-center">
+                          <span className={(selectedStores.reduce((s, x) => s + (x.metric_2v2 || 0), 0) / selectedStores.length) >= 0 ? 'text-emerald-600' : 'text-red-600'}>
+                            {fmtPct(selectedStores.reduce((s, x) => s + (x.metric_2v2 || 0), 0) / selectedStores.length)}
+                          </span>
+                        </td>
+                        <td className="p-2 text-center">-</td>
+                        <td className="p-2 text-center">{fmt(selectedStores.reduce((s, x) => s + (x.qty_2025 || 0), 0))}</td>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...selectedStores].sort((a, b) => (b.metric_12v12 || 0) - (a.metric_12v12 || 0)).map((s, i) => {
+                        const statusLongCfg = STATUS_CFG[s.status_long] || STATUS_CFG['יציב'];
+                        const statusShortCfg = STATUS_CFG[s.status_short] || STATUS_CFG['יציב'];
+                        return (
+                          <tr key={s.id} className="hover:bg-emerald-50 border-b transition-colors">
+                            <td className="p-2 text-center font-bold">{i + 1}</td>
+                            <td className="p-2 text-right">
+                              <div className="font-medium">{s.name}</div>
+                              <div className="text-xs text-gray-500 small">{s.city}</div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <span className={`${statusLongCfg.bg} ${statusLongCfg.text} px-1.5 py-0.5 rounded text-xs whitespace-nowrap`}>{s.status_long || 'יציב'}</span>
+                            </td>
+                            <td className="p-2 text-center">
+                              <div className={`font-medium ${(s.metric_12v12 || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmtPct(s.metric_12v12)}</div>
+                              <div className="text-xs text-gray-400 small">{fmt(s.qty_2024)}→{fmt(s.qty_2025)}</div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <div className={`font-medium ${(s.metric_3v3 || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmtPct(s.metric_3v3)}</div>
+                              <div className="text-xs text-gray-400 small">{fmt(s.qty_prev3)}→{fmt(s.qty_last3)}</div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <div className={`font-medium ${(s.metric_6v6 || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmtPct(s.metric_6v6)}</div>
+                              <div className="text-xs text-gray-400 small">{fmt(s.qty_prev6)}→{fmt(s.qty_last6)}</div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <div className={`font-medium ${(s.metric_2v2 || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmtPct(s.metric_2v2)}</div>
+                              <div className="text-xs text-gray-400 small">{fmt(s.qty_prev2)}→{fmt(s.qty_last2)}</div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <span className={`${statusShortCfg.bg} ${statusShortCfg.text} px-1.5 py-0.5 rounded text-xs whitespace-nowrap`}>{s.status_short || 'יציב'}</span>
+                            </td>
+                            <td className="p-2 text-center font-medium">{fmt(s.qty_2025)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              
+              {/* Table 2: Data */}
+              <div>
+                <div className="flex justify-between items-center mb-3 print:hidden">
+                  <h3 className="text-lg font-bold flex items-center gap-2 text-purple-700">
+                    <BarChart3 size={20} />
+                    נתונים חודשיים
+                    <PeriodSelector value={compDataPeriod} onChange={setCompDataPeriod} className="print:hidden" />
+                    <span className="hidden print:inline text-sm text-gray-500">({getPeriodLabel(compDataPeriod)})</span>
+                  </h3>
+                  <div className="flex gap-2">
+                    <button onClick={exportCompDataCSV} className="flex items-center gap-1 px-3 py-1.5 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600">
+                      <Download size={16} />Excel
+                    </button>
+                  </div>
+                </div>
+                <h3 className="hidden print:block">נתונים חודשיים ({getPeriodLabel(compDataPeriod)})</h3>
+                <div className="overflow-x-auto border rounded-xl print:border-0">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-purple-50 text-gray-700">
+                        <th className="p-2 md:p-3 text-right border-b font-bold">#</th>
+                        <th className="p-2 md:p-3 text-right border-b font-bold min-w-[120px]">חנות</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold bg-blue-50">ברוטו</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold bg-green-50">נטו</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold bg-red-50">חזרות</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold bg-red-50">חזרות %</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold bg-violet-50">אספקות</th>
+                        <th className="p-2 md:p-3 text-center border-b font-bold bg-blue-50">ממוצע<br/>לאספקה</th>
+                      </tr>
+                      {/* Summary Row */}
+                      {(() => {
+                        const compStores = selectedStores.map(s => calcStoreDataForPeriod(s, compDataPeriod));
+                        const totalGross = compStores.reduce((s, x) => s + x.period_gross, 0);
+                        const totalNet = compStores.reduce((s, x) => s + x.period_net, 0);
+                        const totalReturns = compStores.reduce((s, x) => s + x.period_returns, 0);
+                        const totalDeliveries = compStores.reduce((s, x) => s + x.period_deliveries, 0);
+                        const avgReturnsPct = totalGross > 0 ? (totalReturns / totalGross * 100) : 0;
+                        const avgPerDelivery = totalDeliveries > 0 ? (totalNet / totalDeliveries) : 0;
+                        return (
+                          <tr className="bg-purple-100 font-bold text-purple-800 border-b-2 border-purple-300 summary-row-data">
+                            <td className="p-2 text-center">Σ</td>
+                            <td className="p-2 text-right">סה״כ {selectedStores.length} חנויות</td>
+                            <td className="p-2 text-center text-blue-700">{fmt(totalGross)}</td>
+                            <td className="p-2 text-center text-green-700">{fmt(totalNet)}</td>
+                            <td className="p-2 text-center text-red-600">{fmt(totalReturns)}</td>
+                            <td className="p-2 text-center text-red-600">{avgReturnsPct.toFixed(1)}%</td>
+                            <td className="p-2 text-center text-violet-700">{fmt(totalDeliveries)}</td>
+                            <td className="p-2 text-center text-blue-700">{fmt(Math.round(avgPerDelivery))}</td>
+                          </tr>
+                        );
+                      })()}
+                    </thead>
+                    <tbody>
+                      {[...selectedStores].map(s => calcStoreDataForPeriod(s, compDataPeriod)).sort((a, b) => (b.period_net || 0) - (a.period_net || 0)).map((s, i) => {
+                        const returnsPctColor = s.period_returns_pct > 20 ? 'text-red-600 font-bold' : s.period_returns_pct > 10 ? 'text-blue-600' : 'text-gray-600';
+                        return (
+                          <tr key={s.id} className="hover:bg-purple-50 border-b transition-colors">
+                            <td className="p-2 text-center font-bold">{i + 1}</td>
+                            <td className="p-2 text-right">
+                              <div className="font-medium">{s.name}</div>
+                              <div className="text-xs text-gray-500 small">{s.city}</div>
+                            </td>
+                            <td className="p-2 text-center bg-blue-50/30 font-medium text-blue-700">{fmt(s.period_gross)}</td>
+                            <td className="p-2 text-center bg-green-50/30 font-medium text-green-700">{fmt(s.period_net)}</td>
+                            <td className="p-2 text-center bg-red-50/30 font-medium text-red-600">{fmt(s.period_returns)}</td>
+                            <td className={`p-2 text-center bg-red-50/30 ${returnsPctColor}`}>{(s.period_returns_pct || 0).toFixed(1)}%</td>
+                            <td className="p-2 text-center bg-violet-50/30 font-medium text-violet-700">{fmt(s.period_deliveries)}</td>
+                            <td className="p-2 text-center bg-blue-50/30 font-medium text-blue-700">{fmt(Math.round(s.period_avg_per_delivery || 0))}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
   </div>);
 };
 
@@ -4605,6 +6390,7 @@ export default function App() {
   
   // v1.10.7 - Global store comparison modal
   const [showGlobalComparison, setShowGlobalComparison] = useState(false);
+  const [showGlobalProductComparison, setShowGlobalProductComparison] = useState(false);
   
   // v1.8.8 - Stores list filters (lifted up for history preservation)
   const [storesFilters, setStoresFilters] = useState({
@@ -5009,6 +6795,15 @@ export default function App() {
         stores={ACTIVE_STORES}
         onClose={() => setShowGlobalComparison(false)}
         onSelectStore={(s) => { setShowGlobalComparison(false); handleStoreSelect(s); }}
+      />
+    )}
+    
+    {/* Global Product Comparison Modal */}
+    {showGlobalProductComparison && (
+      <GlobalProductComparisonModal 
+        products={PRODUCTS}
+        onClose={() => setShowGlobalProductComparison(false)}
+        onSelectProduct={(p) => { setShowGlobalProductComparison(false); handleProductSelect(p); }}
       />
     )}
   </div>);
