@@ -676,7 +676,10 @@ const MBox = ({ label, value, sub, pos, extra }) => {
 
 // Monthly Sales Table - shows last 12 months of sales and quantities
 // v1.8.5 - Full table with gross/net/returns/deliveries
-const MonthlySalesChart = ({ data, store, title = "מכירות חודשיות" }) => {
+// Monthly Sales Table - shows last 12 months of sales and quantities
+// v1.8.5 - Full table with gross/net/returns/deliveries
+// v1.10.12 - Added product prop for full product data
+const MonthlySalesChart = ({ data, store, product, title = "מכירות חודשיות" }) => {
   const [showYear, setShowYear] = useState('2025');
   const [hideHolidays, setHideHolidays] = useState(false);
   
@@ -750,7 +753,42 @@ const MonthlySalesChart = ({ data, store, title = "מכירות חודשיות" 
         };
       });
     }
-    // אם זה אובייקט monthly_qty בודד (למוצר)
+    // v1.10.12 - אם יש product - לקחת נתונים מהמוצר עם חישוב ברוטו/חזרות
+    else if (product) {
+      // Use H1 returns for 2024, H2 returns for 2025
+      const returnsPctH1 = product.returns_pct_prev6 || 0;
+      const returnsPctH2 = product.returns_pct_last6 || 0;
+      
+      result = months.map(month => {
+        let net = product.monthly_qty?.[month] || 0;
+        const sales = product.monthly?.[month] || (net > 0 ? net * 7.5 : 0);
+        
+        // Use H1 returns for months 01-06, H2 for 07-12
+        const monthNum = parseInt(month.slice(4));
+        const returnsPct = monthNum <= 6 ? returnsPctH1 : returnsPctH2;
+        
+        // Estimate gross from net and returns %: gross = net / (1 - returns%)
+        let gross = 0, returns = 0;
+        if (net > 0 && returnsPct < 100) {
+          gross = Math.round(net / (1 - returnsPct / 100));
+          returns = gross - net;
+        } else if (net < 0) {
+          // Negative net means more returns than sales
+          gross = 0;
+          returns = Math.abs(net);
+          net = net; // Keep negative for display
+        }
+        
+        return {
+          month: MONTH_NAMES_SHORT[month.slice(4)],
+          monthKey: month,
+          gross, net, returns, returnsPct: gross > 0 ? (returns / gross * 100) : 0, 
+          sales, deliveries: 0,
+          holidays: holidaysPerMonth[month] || []
+        };
+      });
+    }
+    // אם זה אובייקט monthly_qty בודד (למוצר - fallback)
     else if (data && typeof data === 'object') {
       result = months.map(month => {
         const net = data[month] || 0;
@@ -773,7 +811,7 @@ const MonthlySalesChart = ({ data, store, title = "מכירות חודשיות" 
     }
     
     return result;
-  }, [data, store, showYear, holidaysPerMonth, hideHolidays]);
+  }, [data, store, product, showYear, holidaysPerMonth, hideHolidays]);
   
   const totals = useMemo(() => {
     const validData = hideHolidays ? chartData.filter(d => !d.isHolidayMonth) : chartData;
@@ -4502,7 +4540,8 @@ const ProductsList = ({ products, onSelect, filters, onFiltersChange }) => {
   </div>)
 };
 
-const ProductDetail = ({ product, onBack, rulesConfig }) => {
+// v1.10.11 - Added onSelectStore for clicking on stores
+const ProductDetail = ({ product, onBack, rulesConfig, onSelectStore }) => {
   const [minQty, setMinQty] = useState(0);
   const chart = useMemo(() => { if (!product.monthly_qty) return []; return Object.entries(product.monthly_qty).sort(([a],[b]) => Number(a)-Number(b)).map(([m,v]) => ({ month: fmtMonth(m), qty: v })); }, [product]);
   const allStoresRaw = PRODUCT_STORES[String(product.id)] || [];
@@ -4745,7 +4784,7 @@ const ProductDetail = ({ product, onBack, rulesConfig }) => {
       <div className="bg-white rounded-xl shadow p-4 text-center"><p className="text-sm text-gray-500">מחזור</p><p className="text-xl font-bold text-gray-600">₪{fmt(product.total_sales)}</p></div>
     </div>
     {/* v1.8.1 - Monthly Sales Chart (Table + Graph combined) */}
-    <MonthlySalesChart data={product.monthly_qty} title={`מכירות חודשיות - ${product.name}`} />
+    <MonthlySalesChart product={product} title={`מכירות חודשיות - ${product.name}`} />
     <div className="bg-white rounded-2xl shadow-lg p-6 border"><h3 className="text-lg font-bold mb-4">מגמת כמויות (כל התקופה)</h3><ResponsiveContainer width="100%" height={250}><AreaChart data={chart}><defs><linearGradient id="pg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/><stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" tick={{fontSize:10}} /><YAxis tickFormatter={v => fmt(v)} tick={{fontSize:10}} /><Tooltip formatter={v => fmt(v)} /><Area type="monotone" dataKey="qty" stroke="#8b5cf6" fill="url(#pg)" name="כמות" /></AreaChart></ResponsiveContainer></div>
     
     {/* v1.10.9 - Stores Table with Tabs */}
@@ -4788,9 +4827,9 @@ const ProductDetail = ({ product, onBack, rulesConfig }) => {
       {/* Table based on view selection */}
       {stores.length > 0 ? (
         tableView === 'metrics' ? (
-          <Table data={stores} cols={storeMetricsCols} name={'product_' + product.id + '_stores_metrics'} compact summaryRow={metricsSummaryRow} />
+          <Table data={stores} cols={storeMetricsCols} name={'product_' + product.id + '_stores_metrics'} compact summaryRow={metricsSummaryRow} onRow={onSelectStore} />
         ) : (
-          <Table data={storesWithData} cols={storeDataCols} name={'product_' + product.id + '_stores_data'} compact summaryRow={dataSummaryRow} periodSelector={<PeriodSelector value={dataPeriod} onChange={setDataPeriod} />} />
+          <Table data={storesWithData} cols={storeDataCols} name={'product_' + product.id + '_stores_data'} compact summaryRow={dataSummaryRow} periodSelector={<PeriodSelector value={dataPeriod} onChange={setDataPeriod} />} onRow={onSelectStore} />
         )
       ) : <p className="text-gray-500 text-center py-8">אין נתונים</p>}
     </div>
@@ -6219,7 +6258,7 @@ const SettingsPage = ({ onLogout }) => {
         <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-blue-600">{STORES_RAW.length}</p><p className="text-xs text-gray-500">חנויות</p></div>
         <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-purple-600">{PRODUCTS_RAW.length}</p><p className="text-xs text-gray-500">מוצרים</p></div>
         <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-emerald-600">{STORES_RAW.filter(s => !s.is_inactive).length}</p><p className="text-xs text-gray-500">חנויות פעילות</p></div>
-        <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-gray-600">v1.10.7</p><p className="text-xs text-gray-500">גרסה</p></div>
+        <div className="p-3 bg-gray-50 rounded-xl"><p className="text-2xl font-bold text-gray-600">v1.10.12</p><p className="text-xs text-gray-500">גרסה</p></div>
       </div>
       <p className="text-xs text-gray-400 text-center mt-4">עדכון אחרון: ינואר 2026</p>
     </div>
@@ -6419,6 +6458,7 @@ export default function App() {
       drillDownFilter,
       storesFilters: { ...storesFilters },
       productsFilters: { ...productsFilters },
+      scrollY: window.scrollY, // v1.10.11 - Save scroll position
       timestamp: Date.now()
     };
     navHistoryRef.current = [...navHistoryRef.current, currentState];
@@ -6440,6 +6480,13 @@ export default function App() {
     setDrillDownFilter(prevState.drillDownFilter);
     setStoresFilters(prevState.storesFilters);
     setProductsFilters(prevState.productsFilters);
+    
+    // v1.10.11 - Restore scroll position after DOM updates
+    if (prevState.scrollY !== undefined) {
+      setTimeout(() => {
+        window.scrollTo(0, prevState.scrollY);
+      }, 50);
+    }
     
     return true;
   };
@@ -6623,19 +6670,26 @@ export default function App() {
   };
   
   // v1.9.0 - Store select with history
+  // v1.10.11 - Look up full store data if needed (for stores from PRODUCT_STORES)
+  // v1.10.12 - Scroll to top when entering store
   const handleStoreSelect = (s) => {
     pushToHistory(); // Save current state before navigating
     const newSourceWindow = tab;
     setSourceWindow(newSourceWindow);
-    setStore(s);
+    // Look up full store data by id if needed
+    const fullStore = STORES.find(st => st.id === s.id) || s;
+    setStore(fullStore);
+    window.scrollTo(0, 0); // Scroll to top
   };
   
   // v1.9.0 - Product select with history
+  // v1.10.12 - Scroll to top when entering product
   const handleProductSelect = (p) => {
     pushToHistory(); // Save current state before navigating
     const newSourceWindow = tab;
     setSourceWindow(newSourceWindow);
     setProduct(p);
+    window.scrollTo(0, 0); // Scroll to top
   };
   
   // v1.9.0 - Update stores filters (no history needed for filters)
@@ -6656,7 +6710,7 @@ export default function App() {
   
   const content = () => {
     if (store) return <StoreDetail store={store} onBack={handleBack} allStores={STORES} excludedProducts={allExcludedProducts} sourceWindow={sourceWindow ? getTabName(sourceWindow) : null} rulesConfig={rulesConfig} onSelectStore={handleStoreSelect} />;
-    if (product) return <ProductDetail product={product} onBack={handleBack} sourceWindow={sourceWindow ? getTabName(sourceWindow) : null} rulesConfig={rulesConfig} />;
+    if (product) return <ProductDetail product={product} onBack={handleBack} sourceWindow={sourceWindow ? getTabName(sourceWindow) : null} rulesConfig={rulesConfig} onSelectStore={handleStoreSelect} />;
     switch (tab) {
       case 'overview': return <Overview stores={ACTIVE_STORES} products={PRODUCTS} onNav={nav} onDrillDown={handleDrillDown} />;
       case 'stores': return <StoresList stores={ACTIVE_STORES} onSelect={handleStoreSelect} filters={storesFilters} onFiltersChange={updateStoresFilters} />;
@@ -6714,7 +6768,7 @@ export default function App() {
         <div className="flex items-center gap-4">
           <button onClick={() => setMenu(!menu)} className="lg:hidden p-2 hover:bg-gray-100 rounded-xl">{menu ? <X size={24}/> : <Menu size={24}/>}</button>
           <BaronLogo />
-          <span className="text-xs text-gray-400 hidden sm:inline">v1.10.7</span>
+          <span className="text-xs text-gray-400 hidden sm:inline">v1.10.12</span>
         </div>
         <div className="flex items-center gap-3">
           <button 
